@@ -158,6 +158,7 @@ Because `engine.js` is an ES module, browsers won't allow loading it over
 - [x] SRLG (Shared Risk Link Group) submarine-cable group failure — N-1 generalized to N-K
 - [x] SLO matrix coverage — C2 RTT / SLO mode (per-pair path RTT vs SLO target, coverage %)
 - [x] LSDB → `topology.js` parser — paste / file `show ip ospf database` via the data editor
+- [ ] C10 congestion optimization v2 — N-1 survivability gate, RTT detour cap, bandwidth unit cost, change budget; design in [C10-next.md](./C10-next.md)
 - [ ] Explicit-path steering (steer / TE): pull specific traffic off the shortest path + bandwidth admission (CAC, "overflow / admission-fail once full") — planning in [steer.md](./steer.md)
 - [ ] Multi-area / OSPF inter-area cost computation
 - [ ] Flex-Algo (RFC 9350) multi-SPF parallel visualization

@@ -103,9 +103,7 @@ type External = {
 | `rtt.js` | `module.exports = { rtt }` | C2 RTT/SLO matrix mode (§4.5), C10 cost reference | C2 falls back to cost-only; C10 reference column hidden |
 | `srlg.js` | global `srlg` (no exports) | C5 failure-sim SRLG dropdown | Only single-element failure remains |
 
-`demand.js` provides multiple scenario profiles (monthly avg / worst / regional
-busy hour), switched via `demand.active`; `engine.js` only reads
-`demand.matrix` / `demand.default` (profile switching is transparent to the algorithms).
+`demand.js` provides **5 scenario profiles** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — switched via `demand.active`; `engine.js` only reads `demand.matrix` / `demand.default` (profile switching is transparent to the algorithms). Values are **float Gbps** (1 decimal place in gen.mjs; 3 decimal places in companions.mjs). `rtt.js` carries a `cityRef` array (city-pair public RTT reference); it is preserved on round-trip through the data editor but **not editable in the UI** — it feeds gen.mjs only.
 
 **OSPF-imported datasets**: `topology.imported.js` (+ companions
 `demand/srlg/rtt.imported.js`) are produced by the import pipeline from real
@@ -581,6 +579,9 @@ Topolograph naming). Main differences:
 - §12 changed to an authoritative "UI tab (C1–C10) → backing §/function" mapping; algorithms are anchored solely by §, no longer by C numbers (the old `Cx` prefix in engine.js has been removed)
 - Added §6.3b traffic-weighted node centrality (`computeNodeTraffic`) + the C3 transit-count⇄traffic-weighted toggle
 - Added §15 OSPF weight optimization (Fortz-Thorup objective + Tabu Search), integrated into C10; the optimizer's bounds are capped by `COST_CLAMP` (`[5,500]`, a single constant exported by the engine), preventing long-link RTT floors from hitting the ceiling and being frozen
+- Added §4.5 matrix RTT/SLO mode (C2 defaults to an RTT view scored against an SLO target, with coverage %)
+- Added an OSPF LSDB import path: the shared pure module `ospf-import.js` parses `show ip ospf database router/network` into the §1 schema (populating `rid`) and produces `*.imported.js` datasets that live alongside the demo data — the original spec assumed a hand-authored static topology
+- Demand values changed from integer to **float Gbps** (1 d.p. in gen.mjs; 3 d.p. in companions); profile set expanded to 5: `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` (companions now matches gen.mjs); RTT CSV files renamed `node_rtt.csv` / `city_rtt.csv`
 - **Planned (not implemented)**: explicit-path steering **steer** (Tier 0, pull specific traffic off the shortest path) + bandwidth admission **CAC** (Tier 1, "overflow / admission-fail once full"). Design in `steer.md`; once implemented, merged into a new §.
 
 The block comments in `engine.js` (`§4 — SPT` …) correspond two-way with the §

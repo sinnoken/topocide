@@ -750,7 +750,7 @@ const I18N = {
     // --- C2 Matrix ---
     'c2.title':         '最短路徑矩陣',
     'c2.hint':          '所有 Router 之間的最短路徑成本一覽表,底色依成本分 4 階。點任一格查看路徑詳情並在圖上高亮。',
-    'c2.hintCommon':    '點任一格查看路徑詳情並在圖上高亮。',
+    'c2.hintCommon':    '點任一格查看路徑詳情並在圖上高亮。點擊後可用 ↑↓←→ 鍵盤導覽。',
     'c2.legend.t1':     '<b>≤30</b> — 區域內',
     'c2.legend.t2':     '<b>31–60</b> — 跨區域',
     'c2.legend.t3':     '<b>61–100</b> — 跨洋',
@@ -1041,7 +1041,7 @@ const I18N = {
     // --- C2 Matrix ---
     'c2.title':         'Shortest-path matrix',
     'c2.hint':          'A table of shortest-path cost between all routers, shaded into 4 tiers by cost. Click any cell to see path details and highlight them on the graph.',
-    'c2.hintCommon':    'Click any cell to see path details and highlight them on the graph.',
+    'c2.hintCommon':    'Click any cell to see path details and highlight them on the graph. After clicking, use ↑↓←→ to navigate.',
     'c2.legend.t1':     '<b>≤30</b> — intra-region',
     'c2.legend.t2':     '<b>31–60</b> — inter-region',
     'c2.legend.t3':     '<b>61–100</b> — transoceanic',
@@ -2166,10 +2166,11 @@ const C3_AllPairs = (() => {
 
     // 節點樞紐度排行 — 過路數(§6.3 Freeman BC)⇄ 流量加權(§6.3b,吃重力模型 demand)切換
     const unitLabel = useDemand ? 'Gbps' : 'BC';
-    html += `<h2 class="section-h mt-3">${t('c3.nodeRankHdr')}
-      <span style="float:right;font-weight:400;text-transform:none;letter-spacing:0">
+    html += `<div class="flex items-baseline justify-between mt-3 mb-1">
+      <h2 class="section-h !mt-0 !mb-0">${t('c3.nodeRankHdr')}</h2>
+      <span>
         <button class="np-mode${!useDemand ? ' active' : ''}" data-np-mode="unit" title="${t('c3.toggle.transitTitle')}">${t('c3.toggle.transit')}</button><button class="np-mode${useDemand ? ' active' : ''}" data-np-mode="demand"${demandAvail ? ` title="${t('c3.toggle.weightedTitle')}"` : ` disabled title="${t('c3.toggle.noDemandTitle')}"`}>${t('c3.toggle.weighted')}</button>
-      </span></h2>`;
+      </span></div>`;
     // demand 模式:附 Gbps 可達性帳目 — 失去路徑的 demand 不計入下方節點熱度分母
     if (useDemand && nodeBCResult.lostDemand > 0) {
       const tot = nodeBCResult.totalDemand, lost = nodeBCResult.lostDemand;

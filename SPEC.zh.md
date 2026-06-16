@@ -98,8 +98,7 @@ type External = {
 | `rtt.js` | `module.exports = { rtt }` | C2 RTT/SLO 矩陣模式(§4.5)、C10 成本參考 | C2 退回純成本;C10 參考欄隱藏 |
 | `srlg.js` | global `srlg`(無 exports) | C5 失效模擬的 SRLG 下拉 | 僅剩單一元件失效選項 |
 
-`demand.js` 提供多情境 profile(月均 / 最壞 / 區域忙時),透過 `demand.active` 切換;
-`engine.js` 只讀 `demand.matrix` / `demand.default`(profile 切換對演算法透明)。
+`demand.js` 提供 **5 個情境 profile** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — 透過 `demand.active` 切換；`engine.js` 只讀 `demand.matrix` / `demand.default`(profile 切換對演算法透明)。值為**浮點 Gbps**（gen.mjs 保留 1 位小數；companions 保留 3 位小數）。`rtt.js` 的 `cityRef` 陣列(城市對公開量測參考)在資料編輯器的匯出中保留，但**不提供 UI 編輯** — 僅供 gen.mjs 輸入使用。
 
 **OSPF 匯入資料集**:`topology.imported.js`(+ companion `demand/srlg/rtt.imported.js`)
 由匯入流程從真實 `show ip ospf database router/network` 輸出產生,與 demo 的 `*.js`
@@ -526,6 +525,9 @@ op 優先:
 - §12 改為「UI 分頁(C1–C10)→ 背後 §/函式」權威對照;演算法一律以 § 錨定,不再用 C 編號(舊版 engine.js 的 `Cx` 前綴已移除)
 - 新增 §6.3b 流量加權節點樞紐度(`computeNodeTraffic`)+ C3 過路數⇄流量加權切換
 - 新增 §15 OSPF 權重最佳化(Fortz-Thorup 目標 + Tabu Search),整合於 C10;優化器界以 `COST_CLAMP`(`[5,500]`,engine 匯出單一常數)為上限,避免長鏈路 RTT 下限頂到天花板被 frozen
+- 新增 §4.5 矩陣 RTT/SLO 模式(C2 預設 RTT 檢視,依 SLO 目標評分並附覆蓋率 %)
+- 新增 OSPF LSDB 匯入路徑:共用純模組 `ospf-import.js` 把 `show ip ospf database router/network` 解析成 §1 schema(填入 `rid`),產生與 demo 資料平行並存的 `*.imported.js` —— 原 spec 假設拓樸為手寫靜態檔
+- Demand 值從整數改為**浮點 Gbps**（gen.mjs 1 位小數；companions 3 位小數）；profile 擴展為 5 個：`avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy`（companions 現與 gen.mjs 對齊）；RTT CSV 檔名改為 `node_rtt.csv` / `city_rtt.csv`
 - **規劃中(未實作)**:明確路徑導流 **steer**(Tier 0,把特定流量拉離最短路)+ 頻寬准入 **CAC**(Tier 1,「填滿才溢出 / admission 失敗」)。設計見 `steer.md`;實作後整併為新 §。
 
 `engine.js` 的區塊註解(`§4 — SPT` …)與本文 § 編號雙向對應;UI 分頁編號另見 §12。
