@@ -131,6 +131,16 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
   border:1px solid var(--line-2);padding:9px 16px;border-radius:8px;box-shadow:0 8px 24px #000a;
   opacity:0;transition:.25s;pointer-events:none;z-index:60}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
+/* ── Contextual Floating Toolbar ── */
+#btnSnap.on{background:#d97706;color:#fff;border-color:#d97706}
+#btnSnap.on:hover{background:#b45309;border-color:#b45309}
+#floatBar{position:fixed;z-index:40;display:none;align-items:center;gap:2px;padding:4px 6px;
+  background:var(--panel);border:1px solid var(--line-2);border-radius:8px;
+  box-shadow:0 4px 16px #0008;pointer-events:all}
+#floatBar button{background:none;border:none;cursor:pointer;padding:4px 7px;border-radius:5px;
+  font-size:14px;color:var(--text);line-height:1;transition:background .1s}
+#floatBar button:hover{background:var(--panel-2)}
+#floatBar .sep{width:1px;height:18px;background:var(--line);margin:0 2px}
 
 /* .tabbar / .tab 群已移至上方 type="text/tailwindcss" 區(@apply + --tab-* token);此處不再重複 */
 .panel{display:none;min-height:0}
@@ -195,6 +205,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
     <button class="btn" data-g="edit" id="btnAddPN"     title="在畫布中央新增一個 Pseudo-node（交換式網段抽象）">＋ Pseudonode</button>
     <button class="btn" data-g="edit" id="btnConnect"   title="開啟連線模式，從一個節點拖曳到另一個節點建立鏈路 (E)">🖉 連線模式 <span class="k">E</span></button>
     <button class="btn danger" data-g="edit" id="btnDelete" title="刪除目前選取的節點或鏈路 (Del)">🗑 刪除 <span class="k">Del</span></button>
+    <button class="btn" data-g="view" id="btnSnap" title="格點吸附(Metro Map grid)">⊞ Snap</button>
     <select class="btn" data-g="view" id="layoutSel" title="佈局演算法" style="padding-left:8px;padding-right:8px">
       <optgroup label="地理 / RTT">
         <option value="geo-map" selected>地圖真實比例(Equal Earth)</option>
@@ -337,7 +348,10 @@ const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>
 
 // ── cxtmenu 偵測(唯一外掛;缺了只少右鍵選單,核心編輯不受影響)──────────────
 let HAS_CX = false, HAS_DAGRE = false;
-if (typeof window.cytoscapeCxtmenu === 'function'){ try{ cytoscape.use(window.cytoscapeCxtmenu); HAS_CX=true; }catch(e){} }
+if (typeof window.cytoscapeCxtmenu === 'function'){
+  if (!cytoscape.prototype.cxtmenu) try{ cytoscape.use(window.cytoscapeCxtmenu); }catch(e){}
+  HAS_CX=true;
+}
 // dagre 轉接需要全域 dagre;兩者都在才註冊(否則 runLayout 會退回 CoSE)
 if (typeof window.cytoscapeDagre === 'function' && typeof window.dagre !== 'undefined'){
   try{ cytoscape.use(window.cytoscapeDagre); HAS_DAGRE=true; }catch(e){}
@@ -1238,6 +1252,8 @@ document.addEventListener('keydown',(e)=>{
   else if((e.ctrlKey||e.metaKey)&&k==='z'){ e.preventDefault(); e.shiftKey?history.redo():history.undo(); }
   else if((e.ctrlKey||e.metaKey)&&k==='y'){ e.preventDefault(); history.redo(); }
   else if(e.key==='Escape'&&connectMode){ setConnect(false); }
+  else if(k==='h'){ alignNodes('centerH'); }
+  else if(k==='v'){ alignNodes('middleV'); }
 });
 
 // 全頁 undo — 值編輯走 focus/commit:focusin 先拍編輯前快照,change(失焦/Enter)有變更才提交一步。
@@ -1258,6 +1274,72 @@ cy.on('free','node',(e)=>{
   if(_dragSnap && _grabPos){ const q=e.target.position();
     if(Math.abs(q.x-_grabPos.x)>0.5 || Math.abs(q.y-_grabPos.y)>0.5) history.commit(_dragSnap); }
   _dragSnap=null; _grabPos=null;
+  // Snap-to-grid:放開後吸附到最近格點
+  if(snapOn){ const g=20, n=e.target;
+    n.position({x:Math.round(n.position('x')/g)*g, y:Math.round(n.position('y')/g)*g}); }
+  updateFloatBar();
+});
+
+// ── Snap-to-Grid Toggle ─────────────────────────────────────────────────────
+let snapOn=false;
+$('btnSnap').onclick=()=>{
+  snapOn=!snapOn;
+  $('btnSnap').classList.toggle('on',snapOn);
+};
+
+// ── Align / Distribute ──────────────────────────────────────────────────────
+function alignNodes(dir){
+  const sel=cy.nodes(':selected');
+  if(sel.length<2){ setStatus('warn','請先選取 ≥2 個節點'); return; }
+  history.push();
+  const bb=sel.boundingBox();
+  cy.startBatch();
+  switch(dir){
+    case 'left':    sel.forEach(n=>n.position('x',bb.x1+n.width()/2));   break;
+    case 'centerH': sel.forEach(n=>n.position('x',bb.x1+bb.w/2));        break;
+    case 'right':   sel.forEach(n=>n.position('x',bb.x2-n.width()/2));   break;
+    case 'top':     sel.forEach(n=>n.position('y',bb.y1+n.height()/2));   break;
+    case 'middleV': sel.forEach(n=>n.position('y',bb.y1+bb.h/2));        break;
+    case 'bottom':  sel.forEach(n=>n.position('y',bb.y2-n.height()/2));   break;
+    case 'distH':{
+      const arr=sel.toArray().sort((a,b)=>a.position('x')-b.position('x'));
+      if(arr.length<2){cy.endBatch();return;}
+      const step=(arr[arr.length-1].position('x')-arr[0].position('x'))/(arr.length-1)||0;
+      arr.forEach((n,i)=>n.position('x',arr[0].position('x')+step*i));
+      break;}
+    case 'distV':{
+      const arr=sel.toArray().sort((a,b)=>a.position('y')-b.position('y'));
+      if(arr.length<2){cy.endBatch();return;}
+      const step=(arr[arr.length-1].position('y')-arr[0].position('y'))/(arr.length-1)||0;
+      arr.forEach((n,i)=>n.position('y',arr[0].position('y')+step*i));
+      break;}
+  }
+  cy.endBatch();
+  updateFloatBar();
+}
+
+// ── Contextual Floating Toolbar ─────────────────────────────────────────────
+let _fbTimer=null;
+function updateFloatBar(){
+  clearTimeout(_fbTimer);
+  _fbTimer=requestAnimationFrame(()=>{
+    const sel=cy.nodes(':selected');
+    const bar=$('floatBar');
+    if(sel.length<2||TAB!=='topo'){ bar.style.display='none'; return; }
+    const bb=sel.boundingBox(), pan=cy.pan(), zoom=cy.zoom();
+    const rect=cy.container().getBoundingClientRect();
+    const vpX=rect.left+(bb.x1+bb.w/2)*zoom+pan.x;
+    const vpY=rect.top+bb.y1*zoom+pan.y;
+    bar.style.display='flex';
+    // 先顯示才能取 offsetWidth
+    bar.style.left=(vpX-bar.offsetWidth/2)+'px';
+    bar.style.top=(vpY-bar.offsetHeight-16)+'px';
+  });
+}
+cy.on('select unselect position pan zoom resize',updateFloatBar);
+$('floatBar').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-align]'); if(!btn) return;
+  alignNodes(btn.dataset.align);
 });
 
 // ── 驗證(連通性 + degree<2)──────────────────────────────────────────────
@@ -1645,6 +1727,7 @@ function switchTab(t){
   else if(t==='demand') renderDemand();
   else if(t==='srlg') renderSrlg();
   else if(t==='rtt') renderRtt();
+  updateFloatBar();
 }
 document.querySelectorAll('.tab').forEach(el=>el.addEventListener('click', ()=>switchTab(el.dataset.tab)));
 
@@ -1905,5 +1988,18 @@ switchTab(TAB);
 window.addEventListener('resize', ()=>cy.resize());
 requestAnimationFrame(()=>{ cy.resize(); });
 </script>
+<!-- ── Contextual Floating Toolbar ── -->
+<div id="floatBar">
+  <button data-align="left"    title="靠左對齊 (Align Left)">⊢</button>
+  <button data-align="centerH" title="水平置中 (H) (H)">─</button>
+  <button data-align="right"   title="靠右對齊 (Align Right)">⊣</button>
+  <span class="sep"></span>
+  <button data-align="top"     title="靠上對齊 (Align Top)">⊤</button>
+  <button data-align="middleV" title="垂直置中 (V) (V)">✛</button>
+  <button data-align="bottom"  title="靠下對齊 (Align Bottom)">⊥</button>
+  <span class="sep"></span>
+  <button data-align="distH"   title="水平均分">↔</button>
+  <button data-align="distV"   title="垂直均分">↕</button>
+</div>
 </body>
 </html>
