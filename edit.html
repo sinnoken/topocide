@@ -283,7 +283,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
     <span><b id="stEdges">0</b> edges</span>
     <span><b id="stCountries">0</b> countries</span>
     <span><b id="stPseudo">0</b> pseudo</span>
-    <span id="stMsg" style="color:var(--muted)"></span>
+    <span id="stMsg" style="color:var(--muted);padding:2px 7px;border-radius:4px;font-weight:500"></span>
     <div class="legend">
       <span><i></i>p2p</span><span><i class="dash"></i>transit</span>
       <span class="tag" style="border-color:var(--gold);color:var(--gold)">ASBR</span>
@@ -1371,8 +1371,22 @@ function refresh(){
 let stTimer=null;
 function setStatus(kind,msg){
   $('connDot').className='dot '+(kind==='ok'?'ok':kind==='warn'?'warn':'bad');
-  const m=$('stMsg'); m.textContent=msg; m.style.color=kind==='bad'?'#991b1b':kind==='warn'?'#854d0e':'#166534';
-  clearTimeout(stTimer); if(msg) stTimer=setTimeout(()=>{ m.textContent=''; },6000);
+  const m=$('stMsg');
+  m.textContent=msg;
+  if(kind==='bad'){
+    m.style.cssText='padding:2px 7px;border-radius:4px;font-weight:600;color:#fff;background:#b91c1c';
+  } else if(kind==='warn'){
+    m.style.cssText='padding:2px 7px;border-radius:4px;font-weight:600;color:#1c1917;background:#fbbf24';
+  } else {
+    m.style.cssText='padding:2px 7px;border-radius:4px;font-weight:500;color:var(--muted);background:none';
+  }
+  // 按鈕 badge：bad/warn 時顯示警示色，ok 時還原
+  const btn=$('btnValidate');
+  if(kind==='bad'){   btn.style.cssText='background:#b91c1c;color:#fff;border-color:#b91c1c'; }
+  else if(kind==='warn'){ btn.style.cssText='background:#d97706;color:#fff;border-color:#d97706'; }
+  else {              btn.style.cssText=''; }
+  clearTimeout(stTimer);
+  if(kind==='ok' && msg) stTimer=setTimeout(()=>{ m.textContent=''; m.style.cssText='padding:2px 7px;border-radius:4px;font-weight:500;color:var(--muted);background:none'; },6000);
 }
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show');
   clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove('show'),2200); }
