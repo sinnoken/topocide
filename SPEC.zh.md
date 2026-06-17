@@ -98,12 +98,13 @@ type External = {
 | `rtt.js` | `module.exports = { rtt }` | C2 RTT/SLO 矩陣模式(§4.5)、C10 成本參考 | C2 退回純成本;C10 參考欄隱藏 |
 | `srlg.js` | global `srlg`(無 exports) | C5 失效模擬的 SRLG 下拉 | 僅剩單一元件失效選項 |
 
-`demand.js` 提供 **5 個情境 profile** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — 透過 `demand.active` 切換；`engine.js` 只讀 `demand.matrix` / `demand.default`(profile 切換對演算法透明)。值為**浮點 Gbps**（gen.mjs 保留 1 位小數；companions 保留 3 位小數）。`rtt.js` 的 `cityRef` 陣列(城市對公開量測參考)在資料編輯器的匯出中保留，但**不提供 UI 編輯** — 僅供 gen.mjs 輸入使用。
+`demand.js` 提供 **5 個情境 profile** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — 透過 `demand.active` 切換；`engine.js` 只讀 `demand.matrix` / `demand.default`(profile 切換對演算法透明)。值為**浮點 Gbps**（gen.mjs 保留 1 位小數；companions 保留 3 位小數）。`rtt.js` 只含 `matrix`（城市對 RTT）與 `edges`（PoP 節點對 RTT）；`cityRef` 欄位已移除（僅是 `city_rtt.csv` 的鏡像，前端不消費）。
 
 **OSPF 匯入資料集**:`topology.imported.js`(+ companion `demand/srlg/rtt.imported.js`)
 由匯入流程從真實 `show ip ospf database router/network` 輸出產生,與 demo 的 `*.js`
 **平行並存、不互蓋**。LSDB 解析為共用純模組 `ospf-import.js`(資料編輯器與
 `working/ospf_to_topology.mjs` 共 import);匯入的 router 節點帶 `rid`(§1.2)與安全 token 的 `id`。
+`ospf-import.js` 的 `OSPF_CITY` 值為純城市碼字串；country 由 `gravity.js` 的 `CITY_GEO` 衍生（城市地理 SSOT）。
 工具鏈與固定產生順序見 CLAUDE.md。
 
 ---
@@ -528,6 +529,12 @@ op 優先:
 - 新增 §4.5 矩陣 RTT/SLO 模式(C2 預設 RTT 檢視,依 SLO 目標評分並附覆蓋率 %)
 - 新增 OSPF LSDB 匯入路徑:共用純模組 `ospf-import.js` 把 `show ip ospf database router/network` 解析成 §1 schema(填入 `rid`),產生與 demo 資料平行並存的 `*.imported.js` —— 原 spec 假設拓樸為手寫靜態檔
 - Demand 值從整數改為**浮點 Gbps**（gen.mjs 1 位小數；companions 3 位小數）；profile 擴展為 5 個：`avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy`（companions 現與 gen.mjs 對齊）；RTT CSV 檔名改為 `node_rtt.csv` / `city_rtt.csv`
+- `gravity.js`（位於 `output/`）為重力模型常數（D0/K/EMIT/FIBER）、`CITY_GEO`（100+ 城市的 lat/lon/country）與 `haversineKmCity()` 的 SSOT；browser + Node 皆可 import；由 `gen.mjs`、`companions.mjs`、`ospf-import.js`、`edit.html` 共 import（取代 `working/gravity.mjs`）
+- `rtt.js` 現只含 `matrix` 與 `edges`；`cityRef` 欄位已移除（僅是 `city_rtt.csv` 的鏡像，前端不消費）
+- `ospf-import.js` 的 `OSPF_CITY` 值從 `{ city, country }` 物件簡化為純城市碼字串；country 由 `gravity.js` 的 `CITY_GEO` 衍生
+- `edit.html` 資料編輯器：Equal Earth 投影 LON0 從 140°E 改為 150°E（`layoutGeoMap()` 與 `layoutMetroMap()` 皆適用；ITU/Telegeography 亞太電信業界慣例，縫合線在 −30°W，避免 Fortaleza 跑到錯的一側）；新增**地鐵圖**佈局選項（「八向化」）— Equal Earth 投影 → 格點量化 → Octilinear Nudge → 重疊消解；參數在 `LAYOUT_PARAMS.metro`（`grid`、`nudgeIter`、`angleTol`、`geoAnchor`、`distPow`、`directions` 8/16/32）；約 70–80% 的邊可達到八向角
+- `metro-tune.html`：新獨立互動調參工具，用於調整地鐵圖佈局參數；6 種壓縮模式、邊著色即時預覽（綠=八向/橘=近似/紅=非八向）、方向數選擇器（8/16/32）、顯示控制
+- `serve.py`：新開發用 HTTP 伺服器，回傳 `Cache-Control: no-store`；取代 `python -m http.server`（後者有約 1 分鐘的瀏覽器快取延遲）
 - **規劃中(未實作)**:明確路徑導流 **steer**(Tier 0,把特定流量拉離最短路)+ 頻寬准入 **CAC**(Tier 1,「填滿才溢出 / admission 失敗」)。設計見 `steer.md`;實作後整併為新 §。
 
 `engine.js` 的區塊註解(`§4 — SPT` …)與本文 § 編號雙向對應;UI 分頁編號另見 §12。

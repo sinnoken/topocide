@@ -85,7 +85,7 @@ BlastRadius emphasizes **"what the network looks like when it breaks"**:
 Because `engine.js` is an ES module, browsers won't allow loading it over
 `file://`; you need to serve it over HTTP:
 
-- **Command line**: `python -m http.server 8000` → open `http://localhost:8000/` in a browser
+- **Command line**: `cd /mnt/workspace/output && python serve.py` → open `http://localhost:8000/` in a browser (`serve.py` returns `Cache-Control: no-store` so changes take effect immediately; `python -m http.server` has ~1 min browser-cache delay)
 - **VS Code**: install the Live Server extension → right-click `index.html` → "Open with Live Server"
 - **GitHub Pages**: Repo Settings → Pages → once enabled, open `https://<user>.github.io/<repo>/` directly
 

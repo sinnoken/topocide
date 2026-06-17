@@ -80,7 +80,7 @@ BlastRadius 是一個**單檔 HTML** 的網路拓樸分析工具,把「最短路
 
 因為 `engine.js` 是 ES module,瀏覽器不允許 `file://` 載入,需用 HTTP 啟動:
 
-- **命令列**:`python -m http.server 8000` → 瀏覽器開 `http://localhost:8000/`
+- **命令列**:`cd /mnt/workspace/output && python serve.py` → 瀏覽器開 `http://localhost:8000/`（`serve.py` 回傳 `Cache-Control: no-store`,改版後立即生效；`python -m http.server` 有約 1 分鐘快取延遲）
 - **VS Code**:裝 Live Server 擴充套件 → 右鍵 `index.html` → "Open with Live Server"
 - **GitHub Pages**:Repo Settings → Pages → 啟用後直接開 `https://<user>.github.io/<repo>/`
 
@@ -153,6 +153,7 @@ BlastRadius 是一個**單檔 HTML** 的網路拓樸分析工具,把「最短路
 - [x] SRLG(Shared Risk Link Group)海纜群組失效 — N-1 進階成 N-K
 - [x] SLO 矩陣覆蓋 — C2 RTT / SLO 模式(每 pair 路徑 RTT vs SLO 目標,覆蓋率 %)
 - [x] LSDB → `topology.js` parser — 經資料編輯器貼上 / 檔案 `show ip ospf database`
+- [ ] C10 壅塞最佳化 v2 — N-1 生存性閘、RTT 繞道上限、頻寬單位成本、異動上限;設計見 [C10-next.md](./C10-next.md)
 - [ ] 明確路徑導流(steer / TE):把特定流量拉離最短路 + 頻寬准入(CAC,「填滿才溢出 / admission 失敗」)— 規劃見 [steer.md](./steer.md)
 - [ ] 多 Area / OSPF inter-area cost 計算
 - [ ] Flex-Algo (RFC 9350) 多 SPF 並行視覺化

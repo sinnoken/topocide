@@ -103,7 +103,7 @@ type External = {
 | `rtt.js` | `module.exports = { rtt }` | C2 RTT/SLO matrix mode (§4.5), C10 cost reference | C2 falls back to cost-only; C10 reference column hidden |
 | `srlg.js` | global `srlg` (no exports) | C5 failure-sim SRLG dropdown | Only single-element failure remains |
 
-`demand.js` provides **5 scenario profiles** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — switched via `demand.active`; `engine.js` only reads `demand.matrix` / `demand.default` (profile switching is transparent to the algorithms). Values are **float Gbps** (1 decimal place in gen.mjs; 3 decimal places in companions.mjs). `rtt.js` carries a `cityRef` array (city-pair public RTT reference); it is preserved on round-trip through the data editor but **not editable in the UI** — it feeds gen.mjs only.
+`demand.js` provides **5 scenario profiles** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — switched via `demand.active`; `engine.js` only reads `demand.matrix` / `demand.default` (profile switching is transparent to the algorithms). Values are **float Gbps** (1 decimal place in gen.mjs; 3 decimal places in companions.mjs). `rtt.js` contains only `matrix` (city×city RTT) and `edges` (PoP node-pair RTT); the `cityRef` field has been removed (it was a mirror of `city_rtt.csv`, never consumed by the frontend).
 
 **OSPF-imported datasets**: `topology.imported.js` (+ companions
 `demand/srlg/rtt.imported.js`) are produced by the import pipeline from real
@@ -111,7 +111,9 @@ type External = {
 `*.js` (they do not overwrite). The LSDB parser is the shared pure module
 `ospf-import.js` (imported by both the data editor and
 `working/ospf_to_topology.mjs`); imported router nodes carry `rid` (§1.2) and a
-safe-token `id`. See CLAUDE.md for the toolchain and fixed generation order.
+safe-token `id`. `OSPF_CITY` values in `ospf-import.js` are plain city code strings;
+country is derived from `CITY_GEO` in `gravity.js` (the SSOT for city geography).
+See CLAUDE.md for the toolchain and fixed generation order.
 
 ---
 
@@ -582,6 +584,12 @@ Topolograph naming). Main differences:
 - Added §4.5 matrix RTT/SLO mode (C2 defaults to an RTT view scored against an SLO target, with coverage %)
 - Added an OSPF LSDB import path: the shared pure module `ospf-import.js` parses `show ip ospf database router/network` into the §1 schema (populating `rid`) and produces `*.imported.js` datasets that live alongside the demo data — the original spec assumed a hand-authored static topology
 - Demand values changed from integer to **float Gbps** (1 d.p. in gen.mjs; 3 d.p. in companions); profile set expanded to 5: `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` (companions now matches gen.mjs); RTT CSV files renamed `node_rtt.csv` / `city_rtt.csv`
+- `gravity.js` (in `output/`) is now the SSOT for gravity model constants (D0/K/EMIT/FIBER), `CITY_GEO` (100+ cities, lat/lon/country), and `haversineKmCity()`; browser + Node compatible; imported by `gen.mjs`, `companions.mjs`, `ospf-import.js`, and `edit.html` (replaces `working/gravity.mjs`)
+- `rtt.js` now contains only `matrix` and `edges`; the `cityRef` field has been removed (it was a mirror of `city_rtt.csv`, never consumed by the frontend)
+- `ospf-import.js` `OSPF_CITY` values simplified from `{ city, country }` objects to plain city code strings; country is derived from `CITY_GEO` in `gravity.js`
+- `edit.html` data editor: Equal Earth projection LON0 changed from 140°E to 150°E in both `layoutGeoMap()` and `layoutMetroMap()` (ITU/Telegeography Asia-Pacific convention; seam at −30°W avoids Fortaleza wrapping to the wrong side); new **Metro Map** layout option ("八向化") added — Equal Earth projection → grid quantization → Octilinear Nudge → overlap resolution; parameters in `LAYOUT_PARAMS.metro` (`grid`, `nudgeIter`, `angleTol`, `geoAnchor`, `distPow`, `directions` 8/16/32); ~70–80% of edges achieve octilinear angles
+- `metro-tune.html`: new standalone interactive parameter tuner for Metro Map layout; features 6 compression modes, live preview with edge coloring (green=octilinear / orange=near / red=non-octilinear), direction selector (8/16/32), and display controls
+- `serve.py`: new dev HTTP server returning `Cache-Control: no-store`; replaces `python -m http.server` which had ~1 min browser-cache delay
 - **Planned (not implemented)**: explicit-path steering **steer** (Tier 0, pull specific traffic off the shortest path) + bandwidth admission **CAC** (Tier 1, "overflow / admission-fail once full"). Design in `steer.md`; once implemented, merged into a new §.
 
 The block comments in `engine.js` (`§4 — SPT` …) correspond two-way with the §
