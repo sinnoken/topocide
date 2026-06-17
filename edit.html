@@ -1427,6 +1427,7 @@ function updateFloatBar(){
   });
 }
 cy.on('position pan zoom resize',updateFloatBar);
+cy.on('layoutstop', markDirty);  // 布局跑完後存草稿（位置已更新到 positions Map）
 $('floatBar').addEventListener('click',e=>{
   const btn=e.target.closest('[data-align]'); if(!btn) return;
   alignNodes(btn.dataset.align);
@@ -1554,6 +1555,7 @@ function serializeAll(){
     demand:structuredClone(D),
     srlg:structuredClone(S),
     rtt:structuredClone(R),
+    _savedAt:Date.now(),
   };
 }
 
@@ -1586,13 +1588,16 @@ function markDirty(){
   },1500);
 }
 
-// 啟動時恢復草稿
+// 啟動時恢復草稿：有草稿就跳過後續 fetch（localStorage > *.js > remote）
+let _loadedFromDraft=false;
 (()=>{
   const raw=localStorage.getItem(DRAFT_KEY);
   if(!raw) return;
   try{
     const data=JSON.parse(raw);
-    if((data.nodes||[]).length>0){ hydrateAll(data); toast('↩ 草稿已恢復'); }
+    const age=Date.now()-(data._savedAt||0);
+    if(age > 2*60*60*1000){ localStorage.removeItem(DRAFT_KEY); return; }  // 超過 2 小時丟棄
+    if((data.nodes||[]).length>0){ hydrateAll(data); toast('↩ 草稿已恢復'); _loadedFromDraft=true; }
   }catch(e){}
 })();
 let stTimer=null;
@@ -2109,19 +2114,27 @@ $('btnLoadAll').onclick=()=>{
    .then(()=>{ switchTab(TAB); toast('已載入同目錄 4 個檔'); });
 };
 
-// ── 啟動:試載同目錄 4 個檔,topology 缺則種子起步 ──────────────────────────
-(function start(){
+// ── 啟動：載入優先序 本地 > remote > JS ────────────────────────────────────
+async function startLoad(){
+  // ① 本地 localStorage（已在上方 IIFE 處理）
+  if(_loadedFromDraft) return;
+
+  // ② remote（CF Workers / DB）— 未實作，留 stub
+  // const remoteData = await fetchRemote().catch(()=>null);
+  // if(remoteData){ hydrateAll(remoteData); return; }
+
+  // ③ 同目錄 *.js 檔案（fallback）
   const get=f=>fetch(f).then(r=>r.ok?r.text():Promise.reject());
   const seed=()=>{ addNodeRaw(routerData('TPE',{country:'TW',city:'TPE',isASBR:true,stubs:['1.1.1.1/32']}),{x:300,y:240});
     setStatus('warn','空白起步 — 用工具列/右鍵新增,或「載入全部 / 匯入」'); };
-  Promise.allSettled([get('topology.js'),get('demand.js'),get('srlg.js'),get('rtt.js')]).then(rs=>{
-    if(rs[0].status==='fulfilled'){ try{loadTopologyText(rs[0].value);}catch(e){seed();} } else seed();
-    if(rs[1].status==='fulfilled'){ try{D=parseGlobal(rs[1].value,'demand');}catch(e){} }
-    if(rs[2].status==='fulfilled'){ try{S=parseGlobal(rs[2].value,'srlg');}catch(e){} }
-    if(rs[3].status==='fulfilled'){ try{R=parseGlobal(rs[3].value,'rtt');}catch(e){} }
-    refresh();
-  });
-})();
+  const rs=await Promise.allSettled([get('topology.js'),get('demand.js'),get('srlg.js'),get('rtt.js')]);
+  if(rs[0].status==='fulfilled'){ try{loadTopologyText(rs[0].value);}catch(e){seed();} } else seed();
+  if(rs[1].status==='fulfilled'){ try{D=parseGlobal(rs[1].value,'demand');}catch(e){} }
+  if(rs[2].status==='fulfilled'){ try{S=parseGlobal(rs[2].value,'srlg');}catch(e){} }
+  if(rs[3].status==='fulfilled'){ try{R=parseGlobal(rs[3].value,'rtt');}catch(e){} }
+  refresh();
+}
+startLoad();
 
 // 初始工具列狀態(topo 為預設 tab,all groups 可見;明確初始化以防未來調整預設)
 switchTab(TAB);
