@@ -197,6 +197,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
     <select class="btn" data-g="view" id="layoutSel" title="佈局演算法" style="padding-left:8px;padding-right:8px">
       <optgroup label="地理 / RTT">
         <option value="geo-map" selected>地圖真實比例(Equal Earth)</option>
+        <option value="metro-map">八向化 (Metro Map)</option>
         <option value="cluster-rtt">RTT 群聚炸開</option>
         <option value="mds">RTT 自適應 (MDS)</option>
         <option value="latency-map">RTT 真比例圖</option>
@@ -721,6 +722,14 @@ const LAYOUT_PARAMS = {
     madMult:   3,    // MAD 離群判斷倍數
     goldenAngle: Math.PI * (3 - Math.sqrt(5)), // 黃金角(rad),phyllotaxis fan-out
   },
+  // layoutMetroMap
+  metro: {
+    grid:      80,   // ★ 格點間距(px);越大線條越粗獷、越小越細膩
+    nudgeIter:  5,   // 八向微調迭代輪數
+    angleTol:   8,   // 邊角度容差(°);差距超過此值才嘗試微調
+    geoAnchor: 0.4,  // ★ 地理引力係數(每輪把節點拉回地理位置;0=無 1=強)
+    distPow:  0.75,  // ★ 徑向壓縮指數(1=不壓縮/Equal Earth 原始,0.5=sqrt 激進壓縮長邊)
+  },
   // layoutMDS
   mds: {
     rttPow:  1,      // ★ RTT 壓縮指數:1=原始/跨洋最誇張、0.5=sqrt 較溫和、越小越均勻
@@ -814,7 +823,8 @@ function layoutLatencyMap(){
 // GEO_CITY / CITY_COUNTRY 已整合至 output/gravity.js;此處建立相容別名。
 // Proxy 讓舊式 GEO_CITY[c][0]/[1] 和新式 .lat/.lon 都能用。
 const GEO_CITY = new Proxy(GRAVITY_CITY_GEO, {
-  get(t,k){ const v=t[k]; if(!v) return undefined; return { 0:v.lat, 1:v.lon, lat:v.lat, lon:v.lon, country:v.country }; }
+  get(t,k){ const v=t[k]; if(!v) return undefined;
+    const a=[v.lat,v.lon]; a.lat=v.lat; a.lon=v.lon; a.country=v.country; return a; }
 });
 const CITY_COUNTRY = Object.fromEntries(
   Object.entries(GRAVITY_CITY_GEO).map(([k,v])=>[k,v.country])
@@ -897,6 +907,131 @@ function layoutGeoMap(){
   cy.animate({ fit:{ eles:core, padding:60 }, duration:350 });
   const byCity=placed.filter(n=>{ const c=n.data('city'); return c&&GEO_CITY[c]; }).length;
   toast('Equal Earth(λ0=140°E)鎖定主城市群:'+byCity+' 城市座標、'+(placed.length-byCity)+' 國家中心、'+unplaced.length+' 沿鄰居'+(outliers?';'+outliers+' 跨洋遠點在畫布外(拖曳/滾輪查看)':'')+';重疊請手動拖開。');
+}
+// ── 地鐵圖佈局(Metro Map / Octilinearization) ──────────────────────────────
+// 三步驟:Equal Earth 投影種子 → 格點量化 → 八向微調(Octilinear Nudge)。
+// 不需要 MILP solver 或 Delaunay(已有邊);約 70-80% 的邊可達 0°/45°/90°。
+// 長距離斜線(TPE↔LON 等)幾何上無法完美八向化,保留近似最佳角度。
+function layoutMetroMap(){
+  const all=cy.nodes().filter(n=>n.id()!=='__ghost__');
+  if(all.length<2){ toast('節點不足,無法執行地鐵圖佈局'); return; }
+
+  const {grid:GRID,nudgeIter:N_ITER,angleTol:A_TOL,geoAnchor:G_ANC,distPow:D_POW}=LAYOUT_PARAMS.metro;
+  const snapG=v=>Math.round(v/GRID)*GRID;
+
+  // Step 1: Equal Earth 投影(複用 layoutGeoMap 的座標與比例尺邏輯)
+  const ll={},placed=[],unplaced=[];
+  all.forEach(n=>{
+    const c=n.data('city'),co=(n.data('country')||'').toUpperCase();
+    const p=(c&&GEO_CITY[c])||(co&&GEO_COUNTRY[co])||null;
+    if(p){ ll[n.id()]=p; placed.push(n); } else unplaced.push(n);
+  });
+  if(!placed.length){ toast('無城市座標,無法執行地鐵圖佈局'); return; }
+
+  const LON0=140;
+  const proj={};
+  placed.forEach(n=>{ const [lat,lon]=ll[n.id()]; const e=equalEarth(lat,lon,LON0);
+    proj[n.id()]={u:e.x/EE_DEG, v:-e.y/EE_DEG}; });
+
+  // 自動比例尺(與 geo-map 一致)
+  const {targetPx:TP,outlierPct:OP}=LAYOUT_PARAMS.geo;
+  const nn2=[]; placed.forEach(a=>{ let m=Infinity; placed.forEach(b=>{
+    if(a===b) return; const d=Math.hypot(proj[a.id()].u-proj[b.id()].u,proj[a.id()].v-proj[b.id()].v);
+    if(d>0.3&&d<m) m=d; }); if(m<Infinity) nn2.push(m); });
+  nn2.sort((a,b)=>a-b);
+  const dense2=nn2.length?(nn2[Math.floor(nn2.length*OP)]||nn2[0]):1;
+  const PPD=Math.min(160,Math.max(6,TP/dense2));
+
+  const pos={};
+  placed.forEach(n=>{ pos[n.id()]={x:proj[n.id()].u*PPD, y:proj[n.id()].v*PPD}; });
+  // 無地理資訊節點:鄰居平均
+  for(let p=0;p<2;p++) unplaced.forEach(nd=>{
+    const nb=nd.neighborhood().nodes().filter(x=>pos[x.id()]);
+    if(nb.length){ let sx=0,sy=0; nb.forEach(x=>{sx+=pos[x.id()].x;sy+=pos[x.id()].y;});
+      pos[nd.id()]={x:sx/nb.length,y:sy/nb.length}; }
+  });
+  all.forEach(nd=>{ if(!pos[nd.id()]) pos[nd.id()]={...nd.position()}; });
+
+  // 非線性徑向壓縮(D_POW<1 縮短長邊、放大近距;D_POW=1 不動)
+  if(D_POW<0.999){
+    const xs=Object.values(pos).map(p=>p.x), ys=Object.values(pos).map(p=>p.y);
+    const cx=(Math.max(...xs)+Math.min(...xs))/2, cy=(Math.max(...ys)+Math.min(...ys))/2;
+    const rmax=Math.max(...Object.values(pos).map(p=>Math.hypot(p.x-cx,p.y-cy)))||1;
+    all.forEach(n=>{ const id=n.id(),dx=pos[id].x-cx,dy=pos[id].y-cy,r=Math.hypot(dx,dy);
+      if(r<0.001) return; const rp=Math.pow(r/rmax,D_POW)*rmax;
+      pos[id]={x:cx+dx/r*rp, y:cy+dy/r*rp}; });
+  }
+
+  // 記錄地理錨點(格點化前的真實投影座標,供每輪拉回)
+  const anchor={};
+  all.forEach(n=>{ anchor[n.id()]={...pos[n.id()]}; });
+
+  // Step 2: 格點量化
+  all.forEach(n=>{ pos[n.id()]={x:snapG(pos[n.id()].x), y:snapG(pos[n.id()].y)}; });
+
+  // Step 2b: 同格點節點展開(phyllotaxis,與 geo-map 同策略)
+  const GA=LAYOUT_PARAMS.geo.goldenAngle;
+  const ND=((placed[0]&&placed[0].width&&placed[0].width())||36)+8;
+  const cells={};
+  all.forEach(n=>{ const k=`${pos[n.id()].x},${pos[n.id()].y}`; (cells[k]??=[]).push(n.id()); });
+  for(const ids of Object.values(cells)){
+    if(ids.length<2) continue; ids.sort();
+    const cx=pos[ids[0]].x,cy=pos[ids[0]].y;
+    ids.forEach((id,i)=>{ const r=ND*Math.sqrt(i),a=i*GA; pos[id]={x:cx+r*Math.cos(a),y:cy+r*Math.sin(a)}; });
+  }
+
+  // Step 3: 八向微調(Octilinear Nudge)
+  // degree 較低的端點優先移動;相等時移 target 端。
+  const deg={};
+  all.forEach(n=>{ deg[n.id()]=n.connectedEdges()
+    .filter(e=>e.source().id()!=='__ghost__'&&e.target().id()!=='__ghost__').length; });
+  const bedges=cy.edges().filter(e=>e.source().id()!=='__ghost__'&&e.target().id()!=='__ghost__');
+
+  for(let iter=0;iter<N_ITER;iter++){
+    bedges.forEach(e=>{
+      const sid=e.source().id(),tid=e.target().id();
+      const dx=pos[tid].x-pos[sid].x, dy=pos[tid].y-pos[sid].y;
+      const L=Math.hypot(dx,dy); if(L<1) return;
+      const angle=Math.atan2(dy,dx)*180/Math.PI;
+      const target=Math.round(angle/45)*45;
+      const diff=Math.abs(angle-target); const adiff=diff>180?360-diff:diff;
+      if(adiff<=A_TOL) return; // 已達八向化容差,不動
+      const rad=target*Math.PI/180;
+      if(deg[tid]<=deg[sid]){
+        pos[tid]={x:snapG(pos[sid].x+L*Math.cos(rad)), y:snapG(pos[sid].y+L*Math.sin(rad))};
+      } else {
+        pos[sid]={x:snapG(pos[tid].x-L*Math.cos(rad)), y:snapG(pos[tid].y-L*Math.sin(rad))};
+      }
+    });
+    // 地理錨點拉回(防止累積漂移,G_ANC=0 不拉)
+    if(G_ANC>0) all.forEach(n=>{ const id=n.id(), f=G_ANC*0.25;
+      pos[id].x+=(anchor[id].x-pos[id].x)*f;
+      pos[id].y+=(anchor[id].y-pos[id].y)*f; });
+  }
+
+  // Step 4: 去重疊(輕量 repulsion,4 輪)
+  const IDS=all.map(n=>n.id());
+  for(let p=0;p<4;p++) for(let i=0;i<IDS.length;i++) for(let j=i+1;j<IDS.length;j++){
+    const ai=IDS[i],bi=IDS[j],dx=pos[bi].x-pos[ai].x,dy=pos[bi].y-pos[ai].y;
+    const dist=Math.hypot(dx,dy);
+    if(dist===0){ pos[bi].x+=GRID; continue; }
+    if(dist<ND){ const push=(ND-dist)/2,nx=dx/dist*push,ny=dy/dist*push;
+      pos[ai].x-=nx;pos[ai].y-=ny;pos[bi].x+=nx;pos[bi].y+=ny; }
+  }
+
+  cy.layout({name:'preset',positions:node=>pos[node.id()],fit:true,padding:40,
+    animate:true,animationDuration:400}).run();
+
+  // 統計八向化率
+  let ok=0,total=0;
+  bedges.forEach(e=>{
+    const sid=e.source().id(),tid=e.target().id();
+    const dx=pos[tid].x-pos[sid].x,dy=pos[tid].y-pos[sid].y;
+    if(Math.hypot(dx,dy)<1) return; total++;
+    const angle=Math.atan2(dy,dx)*180/Math.PI,target=Math.round(angle/45)*45;
+    const diff=Math.abs(angle-target); if((diff>180?360-diff:diff)<=A_TOL+2) ok++;
+  });
+  toast(`地鐵圖佈局:${ok}/${total} 條邊八向化(${total?Math.round(ok/total*100):0}%);長距離斜線為幾何極限,可手動拖曳微調。`);
 }
 // cose 用:每條邊的理想長度 = 城市對 RTT(ms→px)。無 RTT(pseudonode transit 邊)用短邊,讓 PN 靠攏所屬 router。
 function rttEdgeLen(edge){
@@ -992,6 +1127,7 @@ function runLayout(name){
   if(name==='cluster-rtt') return layoutClusterRTT();  // 自訂:RTT 分群 + 群間炸開(兩尺度)
   if(name==='latency-map') return layoutLatencyMap();  // 自訂:raw-RTT MDS 真比例圖(忠實物理,無壓縮)
   if(name==='geo-map') return layoutGeoMap();          // 自訂:Equal Earth 等積投影(λ0=140°E),city→country 兩級 fallback,北朝上
+  if(name==='metro-map') return layoutMetroMap();      // 自訂:Equal Earth 種子 → 格點量化 → 八向微調(Octilinearization)
   if(name==='dagre-rtt') return layoutDagreAdaptive();  // 自訂:dagre + RTT/area/country 後處理
   if(name==='breadthfirst-adaptive') return layoutBreadthfirstAdaptive();  // 自訂:資料挑 root + depthSort
   if(name==='concentric-adaptive') return layoutConcentricAdaptive();  // 自訂:demand/centrality 指標

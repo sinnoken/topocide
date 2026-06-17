@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Metro Map Tuner — BlastRadius</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+<script src="topology.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{display:flex;height:100vh;overflow:hidden;background:#0f1117;color:#e2e8f0;font:13px/1.5 system-ui,sans-serif}
+
+/* ── 左側控制面板 ── */
+#panel{width:270px;flex-shrink:0;display:flex;flex-direction:column;gap:0;border-right:1px solid #1e2433;overflow-y:auto}
+#panel-inner{padding:14px;display:flex;flex-direction:column;gap:14px}
+
+h1{font-size:14px;font-weight:700;color:#90cdf4;letter-spacing:.03em}
+.subtitle{font-size:11px;color:#4a5568;margin-top:2px}
+
+.section{display:flex;flex-direction:column;gap:8px}
+.sec-title{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#4a6580;padding-bottom:3px;border-bottom:1px solid #1e2433}
+
+.param{display:flex;flex-direction:column;gap:4px}
+.param-header{display:flex;justify-content:space-between;align-items:baseline}
+.param-name{font-size:12px;color:#cbd5e0}
+.param-val{font-size:13px;font-weight:700;color:#63b3ed;font-variant-numeric:tabular-nums;min-width:38px;text-align:right}
+.param-desc{font-size:10px;color:#4a6580;line-height:1.3}
+input[type=range]{width:100%;height:4px;accent-color:#4299e1;cursor:pointer}
+
+/* 壓縮曲線 */
+#curve-wrap{background:#151b28;border-radius:6px;padding:8px;border:1px solid #1e2433}
+#curve{display:block}
+.curve-labels{display:flex;justify-content:space-between;font-size:9px;color:#4a6580;margin-top:2px;padding:0 2px}
+
+/* 統計 */
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.stat{background:#151b28;border:1px solid #1e2433;border-radius:6px;padding:8px 10px}
+.stat-val{font-size:22px;font-weight:800;color:#63b3ed;line-height:1}
+.stat-label{font-size:10px;color:#4a6580;margin-top:3px}
+
+/* 八向化進度條 */
+.octi-bar-wrap{height:8px;background:#1e2433;border-radius:4px;overflow:hidden}
+#octiBarFill{height:100%;width:0%;background:linear-gradient(90deg,#fc8181 0%,#f6ad55 50%,#48bb78 85%);transition:width .3s}
+
+/* 圖例 */
+.legend{display:flex;gap:12px;flex-wrap:wrap}
+.leg{display:flex;align-items:center;gap:5px;font-size:11px;color:#a0aec0}
+.leg-line{width:16px;height:3px;border-radius:2px;flex-shrink:0}
+
+/* 複製按鈕 */
+#btnCopy{background:#2b4a72;color:#90cdf4;border:1px solid #2d6a9f;border-radius:6px;padding:9px 12px;
+  cursor:pointer;font-size:12px;font-weight:600;transition:background .15s;text-align:center}
+#btnCopy:hover{background:#2d6a9f}
+
+/* 重設按鈕 */
+#btnReset{background:#1a202c;color:#718096;border:1px solid #2d3748;border-radius:6px;
+  padding:6px 10px;cursor:pointer;font-size:11px}
+#btnReset:hover{color:#e2e8f0}
+
+.btn-row{display:flex;gap:6px}
+
+/* ── 右側畫布 ── */
+#cy-wrap{flex:1;position:relative;overflow:hidden}
+#cy{width:100%;height:100%}
+
+/* 狀態列 */
+#statusbar{position:absolute;bottom:0;left:0;right:0;background:#0f1117cc;
+  backdrop-filter:blur(4px);padding:5px 12px;font-size:11px;color:#718096;
+  border-top:1px solid #1e2433;display:flex;justify-content:space-between}
+#status-msg{color:#90cdf4}
+
+/* 載入遮罩 */
+#loading{position:absolute;inset:0;background:#0f1117;display:flex;align-items:center;
+  justify-content:center;font-size:14px;color:#4a6580;z-index:10;transition:opacity .3s}
+</style>
+</head>
+<body>
+
+<div id="panel">
+<div id="panel-inner">
+
+  <div>
+    <h1>Metro Map Tuner</h1>
+    <div class="subtitle">拖動 slider 即時預覽八向化效果</div>
+  </div>
+
+  <!-- 壓縮 -->
+  <div class="section">
+    <div class="sec-title">非線性壓縮</div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-name">distPow</span>
+        <span class="param-val" id="v_distPow">0.75</span>
+      </div>
+      <input type="range" id="distPow" min="0.30" max="1.00" step="0.05" value="0.75">
+      <div class="param-desc">徑向壓縮指數 — 1.0=不壓縮、0.7=溫和、0.5=sqrt 激進壓跨洋長邊</div>
+    </div>
+    <div id="curve-wrap">
+      <canvas id="curve" width="238" height="90"></canvas>
+      <div class="curve-labels"><span>r=0</span><span>原始距離</span><span>r=1</span></div>
+    </div>
+  </div>
+
+  <!-- 格點 -->
+  <div class="section">
+    <div class="sec-title">格點</div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-name">grid</span>
+        <span class="param-val" id="v_grid">80</span>
+      </div>
+      <input type="range" id="grid" min="40" max="160" step="10" value="80">
+      <div class="param-desc">格點間距 (px) — 越大越粗獷、越小越精細</div>
+    </div>
+  </div>
+
+  <!-- 八向化 -->
+  <div class="section">
+    <div class="sec-title">八向微調</div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-name">nudgeIter</span>
+        <span class="param-val" id="v_nudgeIter">5</span>
+      </div>
+      <input type="range" id="nudgeIter" min="1" max="15" step="1" value="5">
+      <div class="param-desc">迭代輪數 — 越多八向化率越高，收益遞減</div>
+    </div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-name">angleTol</span>
+        <span class="param-val" id="v_angleTol">8</span>
+      </div>
+      <input type="range" id="angleTol" min="2" max="20" step="1" value="8">
+      <div class="param-desc">角度容差 (°) — 差距超過此值才 nudge</div>
+    </div>
+    <div class="param">
+      <div class="param-header">
+        <span class="param-name">geoAnchor</span>
+        <span class="param-val" id="v_geoAnchor">0.40</span>
+      </div>
+      <input type="range" id="geoAnchor" min="0.00" max="1.00" step="0.05" value="0.40">
+      <div class="param-desc">地理引力 — 每輪把節點拉回地理位置的力道</div>
+    </div>
+  </div>
+
+  <!-- 統計 -->
+  <div class="section">
+    <div class="sec-title">結果</div>
+    <div class="octi-bar-wrap"><div id="octiBarFill"></div></div>
+    <div class="stat-row">
+      <div class="stat"><div class="stat-val" id="s_pct">—</div><div class="stat-label">八向化率</div></div>
+      <div class="stat"><div class="stat-val" id="s_ok">—</div><div class="stat-label">達標邊</div></div>
+      <div class="stat"><div class="stat-val" id="s_total">—</div><div class="stat-label">總邊數</div></div>
+      <div class="stat"><div class="stat-val" id="s_placed">—</div><div class="stat-label">地理節點</div></div>
+    </div>
+    <div class="legend">
+      <div class="leg"><div class="leg-line" style="background:#48bb78"></div>八向化</div>
+      <div class="leg"><div class="leg-line" style="background:#f6ad55"></div>近似</div>
+      <div class="leg"><div class="leg-line" style="background:#fc8181"></div>非八向</div>
+    </div>
+  </div>
+
+  <!-- 操作 -->
+  <div class="section">
+    <div class="btn-row">
+      <button id="btnReset">重設預設值</button>
+    </div>
+    <button id="btnCopy">📋 複製 LAYOUT_PARAMS.metro</button>
+  </div>
+
+</div><!-- panel-inner -->
+</div><!-- panel -->
+
+<div id="cy-wrap">
+  <div id="cy"></div>
+  <div id="loading">載入拓樸中…</div>
+  <div id="statusbar">
+    <span id="status-msg">就緒</span>
+    <span id="status-time"></span>
+  </div>
+</div>
+
+<script type="module">
+import { CITY_GEO as GRAVITY_CITY_GEO } from './gravity.js';
+
+// ── Equal Earth(與 edit.html 相同) ──
+const EE_A=[1.340264,-0.081106,0.000893,0.003796], EE_DEG=0.015037;
+function equalEarth(lat,lon,lon0){
+  const R=Math.PI/180, dl=((lon-lon0+540)%360)-180;
+  const phi=lat*R,lam=dl*R,[A1,A2,A3,A4]=EE_A;
+  const th=Math.asin(Math.sqrt(3)/2*Math.sin(phi)),t2=th*th;
+  const x=(2*Math.sqrt(3)*lam*Math.cos(th))/(3*(9*A4*t2*t2*t2*t2+7*A3*t2*t2*t2+3*A2*t2+A1));
+  const y=A4*t2*t2*t2*t2*th+A3*t2*t2*t2*th+A2*t2*th+A1*th;
+  return {x,y};
+}
+
+const GEO_CITY=new Proxy(GRAVITY_CITY_GEO,{
+  get(t,k){const v=t[k];if(!v)return undefined;const a=[v.lat,v.lon];a.lat=v.lat;a.lon=v.lon;a.country=v.country;return a;}
+});
+const GEO_COUNTRY={
+  TW:[23.7,121.0],JP:[36.2,138.3],CN:[35.9,104.2],HK:[22.3,114.2],SG:[1.35,103.8],
+  US:[39.8,-98.6],GB:[54.0,-2.0],DE:[51.2,10.4],FR:[46.6,2.4],NL:[52.1,5.3],
+  AU:[-25.3,133.8],IN:[22.0,79.0],KR:[36.5,127.8],TH:[15.0,101.0],VN:[16.0,107.8],
+  ID:[-2.5,118.0],MY:[4.2,101.9],PH:[12.9,121.8],AE:[24.0,54.0],CA:[56.13,-106.35],
+  GR:[39.0,22.0],ES:[40.0,-4.0],IT:[42.8,12.8],BE:[50.6,4.6],TR:[39.0,35.0],KH:[12.57,104.99],
+};
+
+// ── Cytoscape ──
+const DEFAULTS={distPow:0.75,grid:80,nudgeIter:5,angleTol:8,geoAnchor:0.40};
+
+const cy=cytoscape({
+  container:document.getElementById('cy'),
+  style:[
+    {selector:'node',style:{
+      'background-color':'#2d4a6e','width':16,'height':16,
+      'label':'data(id)','font-size':8,'color':'#90cdf4',
+      'text-valign':'top','text-margin-y':-4,'text-outline-width':0,
+    }},
+    {selector:'node[type="pseudonode"]',style:{
+      'background-color':'#1a2a3e','width':10,'height':10,'shape':'diamond','label':'',
+    }},
+    {selector:'edge',style:{'width':1.5,'line-color':'#2d4a6e','curve-style':'straight'}},
+    {selector:'edge.ok',  style:{'line-color':'#48bb78','width':2}},
+    {selector:'edge.near',style:{'line-color':'#f6ad55','width':1.5}},
+    {selector:'edge.bad', style:{'line-color':'#fc8181','width':1.5}},
+  ],
+  elements:[
+    ...topology.nodes.map(n=>({data:{...n}})),
+    ...topology.edges.map(e=>({data:{id:e.id??e.source+'_'+e.target,source:e.source,target:e.target,...e}})),
+  ],
+  layout:{name:'preset',positions:n=>{
+    const p=topology.positions?.[n.data('id')];
+    return p||{x:Math.random()*600-300,y:Math.random()*400-200};
+  }},
+  userZoomingEnabled:true,userPanningEnabled:true,
+});
+document.getElementById('loading').style.opacity='0';
+setTimeout(()=>document.getElementById('loading').style.display='none',350);
+
+// ── 壓縮曲線 ──
+function drawCurve(p){
+  const cv=document.getElementById('curve'),ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  const PAD={l:20,r:6,t:6,b:4};
+  const iW=W-PAD.l-PAD.r,iH=H-PAD.t-PAD.b;
+
+  // 背景
+  ctx.fillStyle='#151b28';ctx.fillRect(0,0,W,H);
+
+  // 格線
+  ctx.strokeStyle='#1e2433';ctx.lineWidth=1;
+  [0.25,0.5,0.75].forEach(v=>{
+    ctx.beginPath();ctx.moveTo(PAD.l+v*iW,PAD.t);ctx.lineTo(PAD.l+v*iW,PAD.t+iH);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(PAD.l,PAD.t+iH*(1-v));ctx.lineTo(PAD.l+iW,PAD.t+iH*(1-v));ctx.stroke();
+  });
+
+  // 軸
+  ctx.strokeStyle='#2d4a6e';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(PAD.l,PAD.t);ctx.lineTo(PAD.l,PAD.t+iH);ctx.lineTo(PAD.l+iW,PAD.t+iH);ctx.stroke();
+
+  // p=1 參考線
+  ctx.strokeStyle='#2d4a6e';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+  ctx.beginPath();ctx.moveTo(PAD.l,PAD.t+iH);ctx.lineTo(PAD.l+iW,PAD.t);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 曲線
+  const grad=ctx.createLinearGradient(PAD.l,0,PAD.l+iW,0);
+  grad.addColorStop(0,'#4299e1');grad.addColorStop(1,'#63b3ed');
+  ctx.strokeStyle=grad;ctx.lineWidth=2.5;
+  ctx.beginPath();
+  for(let i=0;i<=120;i++){
+    const t=i/120,rp=Math.pow(t,p);
+    const cx2=PAD.l+t*iW,cy2=PAD.t+iH*(1-rp);
+    i===0?ctx.moveTo(cx2,cy2):ctx.lineTo(cx2,cy2);
+  }
+  ctx.stroke();
+
+  // 標籤
+  ctx.fillStyle='#63b3ed';ctx.font='bold 11px system-ui';
+  ctx.fillText(`p = ${p.toFixed(2)}`,PAD.l+4,PAD.t+14);
+  if(p<1){
+    // 面積陰影(視覺化「被壓縮了多少」)
+    ctx.fillStyle='rgba(66,153,225,0.07)';
+    ctx.beginPath();ctx.moveTo(PAD.l,PAD.t+iH);
+    for(let i=0;i<=120;i++){
+      const t=i/120,rp=Math.pow(t,p);
+      ctx.lineTo(PAD.l+t*iW,PAD.t+iH*(1-rp));
+    }
+    ctx.lineTo(PAD.l+iW,PAD.t+iH);ctx.closePath();ctx.fill();
+  }
+}
+
+// ── Metro 演算法 ──
+function runMetro(params){
+  const {distPow:D_POW,grid:GRID,nudgeIter:N_ITER,angleTol:A_TOL,geoAnchor:G_ANC}=params;
+  const snapG=v=>Math.round(v/GRID)*GRID;
+  const t0=performance.now();
+
+  const all=cy.nodes();
+  const ll={},placed=[],unplaced=[];
+  all.forEach(n=>{
+    const c=n.data('city'),co=(n.data('country')||'').toUpperCase();
+    const p=(c&&GEO_CITY[c])||(co&&GEO_COUNTRY[co])||null;
+    if(p){ll[n.id()]=p;placed.push(n);}else unplaced.push(n);
+  });
+  if(!placed.length){setStatus('無城市座標');return null;}
+
+  // Step 1: Equal Earth 投影
+  const LON0=140,proj={};
+  placed.forEach(n=>{const[lat,lon]=ll[n.id()];const e=equalEarth(lat,lon,LON0);
+    proj[n.id()]={u:e.x/EE_DEG,v:-e.y/EE_DEG};});
+
+  // 自動比例尺
+  const nn2=[];
+  placed.forEach(a=>{let m=Infinity;placed.forEach(b=>{
+    if(a===b)return;const d=Math.hypot(proj[a.id()].u-proj[b.id()].u,proj[a.id()].v-proj[b.id()].v);
+    if(d>0.3&&d<m)m=d;});if(m<Infinity)nn2.push(m);});
+  nn2.sort((a,b)=>a-b);
+  const dense=nn2.length?(nn2[Math.floor(nn2.length*0.15)]||nn2[0]):1;
+  const PPD=Math.min(160,Math.max(6,80/dense));
+
+  const pos={};
+  placed.forEach(n=>{pos[n.id()]={x:proj[n.id()].u*PPD,y:proj[n.id()].v*PPD};});
+  for(let p=0;p<2;p++)unplaced.forEach(nd=>{
+    const nb=nd.neighborhood().nodes().filter(x=>pos[x.id()]);
+    if(nb.length){let sx=0,sy=0;nb.forEach(x=>{sx+=pos[x.id()].x;sy+=pos[x.id()].y;});
+      pos[nd.id()]={x:sx/nb.length,y:sy/nb.length};}
+  });
+  all.forEach(nd=>{if(!pos[nd.id()])pos[nd.id()]={x:0,y:0};});
+
+  // Step 2: 非線性徑向壓縮
+  if(D_POW<0.999){
+    const xs=Object.values(pos).map(p=>p.x),ys=Object.values(pos).map(p=>p.y);
+    const cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
+    const rmax=Math.max(...Object.values(pos).map(p=>Math.hypot(p.x-cx,p.y-cy)))||1;
+    all.forEach(n=>{const id=n.id(),dx=pos[id].x-cx,dy=pos[id].y-cy,r=Math.hypot(dx,dy);
+      if(r<0.001)return;const rp=Math.pow(r/rmax,D_POW)*rmax;
+      pos[id]={x:cx+dx/r*rp,y:cy+dy/r*rp};});
+  }
+
+  const anchor={};all.forEach(n=>{anchor[n.id()]={...pos[n.id()]};});
+
+  // Step 3: 格點量化
+  all.forEach(n=>{pos[n.id()]={x:snapG(pos[n.id()].x),y:snapG(pos[n.id()].y)};});
+
+  // 同格點展開
+  const GA=Math.PI*(3-Math.sqrt(5));
+  const ND=((placed[0]&&placed[0].width())||16)+6;
+  const cells={};
+  all.forEach(n=>{const k=`${pos[n.id()].x},${pos[n.id()].y}`;(cells[k]??=[]).push(n.id());});
+  for(const ids of Object.values(cells)){
+    if(ids.length<2)continue;ids.sort();
+    const ccx=pos[ids[0]].x,ccy=pos[ids[0]].y;
+    ids.forEach((id,i)=>{const r=ND*Math.sqrt(i),a=i*GA;pos[id]={x:ccx+r*Math.cos(a),y:ccy+r*Math.sin(a)};});
+  }
+
+  // Step 4: 八向 Nudge
+  const deg={};
+  all.forEach(n=>{deg[n.id()]=n.connectedEdges().length;});
+  const bedges=cy.edges();
+
+  for(let iter=0;iter<N_ITER;iter++){
+    bedges.forEach(e=>{
+      const sid=e.source().id(),tid=e.target().id();
+      const dx=pos[tid].x-pos[sid].x,dy=pos[tid].y-pos[sid].y;
+      const L=Math.hypot(dx,dy);if(L<1)return;
+      const angle=Math.atan2(dy,dx)*180/Math.PI;
+      const target=Math.round(angle/45)*45;
+      const diff=Math.abs(angle-target),adiff=diff>180?360-diff:diff;
+      if(adiff<=A_TOL)return;
+      const rad=target*Math.PI/180;
+      if(deg[tid]<=deg[sid]){
+        pos[tid]={x:snapG(pos[sid].x+L*Math.cos(rad)),y:snapG(pos[sid].y+L*Math.sin(rad))};
+      }else{
+        pos[sid]={x:snapG(pos[tid].x-L*Math.cos(rad)),y:snapG(pos[tid].y-L*Math.sin(rad))};
+      }
+    });
+    if(G_ANC>0)all.forEach(n=>{const id=n.id(),f=G_ANC*0.25;
+      pos[id].x+=(anchor[id].x-pos[id].x)*f;pos[id].y+=(anchor[id].y-pos[id].y)*f;});
+  }
+
+  // Step 5: 去重疊
+  const IDS=all.map(n=>n.id());
+  for(let p=0;p<3;p++)for(let i=0;i<IDS.length;i++)for(let j=i+1;j<IDS.length;j++){
+    const ai=IDS[i],bi=IDS[j];
+    const dx=pos[bi].x-pos[ai].x,dy=pos[bi].y-pos[ai].y,dist=Math.hypot(dx,dy);
+    if(dist===0){pos[bi].x+=GRID;continue;}
+    if(dist<ND){const push=(ND-dist)/2,nx=dx/dist*push,ny=dy/dist*push;
+      pos[ai].x-=nx;pos[ai].y-=ny;pos[bi].x+=nx;pos[bi].y+=ny;}
+  }
+
+  // 套用 + 邊著色
+  cy.layout({name:'preset',positions:n=>pos[n.id()],fit:true,padding:40,animate:false}).run();
+
+  let ok=0,near=0,bad=0;
+  bedges.removeClass('ok near bad');
+  bedges.forEach(e=>{
+    const sid=e.source().id(),tid=e.target().id();
+    const dx=pos[tid].x-pos[sid].x,dy=pos[tid].y-pos[sid].y;
+    if(Math.hypot(dx,dy)<1){e.addClass('ok');ok++;return;}
+    const angle=Math.atan2(dy,dx)*180/Math.PI,target=Math.round(angle/45)*45;
+    const diff=Math.abs(angle-target),adiff=diff>180?360-diff:diff;
+    if(adiff<=A_TOL+3){e.addClass('ok');ok++;}
+    else if(adiff<=A_TOL*2.5){e.addClass('near');near++;}
+    else{e.addClass('bad');bad++;}
+  });
+
+  const elapsed=Math.round(performance.now()-t0);
+  return{ok,near,bad,total:ok+near+bad,placed:placed.length,elapsed};
+}
+
+// ── UI 連線 ──
+function getParams(){
+  return{
+    distPow: +document.getElementById('distPow').value,
+    grid:    +document.getElementById('grid').value,
+    nudgeIter:+document.getElementById('nudgeIter').value,
+    angleTol:+document.getElementById('angleTol').value,
+    geoAnchor:+document.getElementById('geoAnchor').value,
+  };
+}
+function setStatus(msg){document.getElementById('status-msg').textContent=msg;}
+
+const FMT={distPow:v=>v.toFixed(2),geoAnchor:v=>v.toFixed(2),grid:v=>v,nudgeIter:v=>v,angleTol:v=>v};
+
+let timer=null;
+function schedule(fast=false){
+  clearTimeout(timer);
+  timer=setTimeout(()=>{
+    const params=getParams();
+    drawCurve(params.distPow);
+    setStatus('計算中…');
+    requestAnimationFrame(()=>{
+      const s=runMetro(params);
+      if(!s){return;}
+      const pct=s.total?Math.round(s.ok/s.total*100):0;
+      document.getElementById('s_pct').textContent=pct+'%';
+      document.getElementById('s_ok').textContent=s.ok;
+      document.getElementById('s_total').textContent=s.total;
+      document.getElementById('s_placed').textContent=s.placed+'/'+cy.nodes().length;
+      document.getElementById('octiBarFill').style.width=pct+'%';
+      document.getElementById('status-time').textContent=s.elapsed+'ms';
+      setStatus(`八向化 ${pct}%（${s.ok} 達標 · ${s.near} 近似 · ${s.bad} 非八向）`);
+    });
+  }, fast?50:220);
+}
+
+['distPow','grid','nudgeIter','angleTol','geoAnchor'].forEach(id=>{
+  const el=document.getElementById(id),vEl=document.getElementById('v_'+id);
+  el.addEventListener('input',()=>{
+    vEl.textContent=FMT[id](+el.value);
+    schedule();
+  });
+});
+
+document.getElementById('btnReset').addEventListener('click',()=>{
+  Object.entries(DEFAULTS).forEach(([k,v])=>{
+    const el=document.getElementById(k);
+    if(el){el.value=v;document.getElementById('v_'+k).textContent=FMT[k](v);}
+  });
+  schedule(true);
+});
+
+document.getElementById('btnCopy').addEventListener('click',()=>{
+  const p=getParams();
+  const txt=`  metro: {\n    grid:      ${p.grid},\n    nudgeIter:  ${p.nudgeIter},\n    angleTol:   ${p.angleTol},\n    geoAnchor: ${p.geoAnchor.toFixed(2)},\n    distPow:   ${p.distPow.toFixed(2)},\n  },`;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const b=document.getElementById('btnCopy');
+    b.textContent='✅ 已複製到剪貼簿';
+    setTimeout(()=>{b.textContent='📋 複製 LAYOUT_PARAMS.metro';},2000);
+  });
+});
+
+// 初始跑一次
+drawCurve(DEFAULTS.distPow);
+schedule(true);
+</script>
+</body>
+</html>
