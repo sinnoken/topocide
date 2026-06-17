@@ -324,6 +324,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
 import { buildAdjacency, connectedComponents } from './engine.js';
 import { baseGraphStyle } from './graph-style.js';
 import { parseOspfLsdb, OSPF_PLACEHOLDER_CAP } from './ospf-import.js';   // 共用 OSPF 解析(與 working/ospf_to_topology.mjs 同源)
+import { CITY_GEO as GRAVITY_CITY_GEO } from './gravity.js';               // 城市地理資料 SSOT
 // ════════════════════════════════════════════════════════════════════════
 // BlastRadius Topology Editor — 自包含 Cytoscape 編輯器(zero-build)。
 // 依賴:cytoscape core + cxtmenu(右鍵)。建邊與 undo/redo 自寫,不用易碎外掛。
@@ -809,60 +810,24 @@ function layoutLatencyMap(){
   let mx=0,pr=''; for(let i=0;i<geo.length;i++)for(let j=i+1;j<geo.length;j++){ const v=d(cityOf[i],cityOf[j]); if(v!=null&&v>mx){ mx=v; pr=cityOf[i]+'–'+cityOf[j]; } }
   toast('真比例延遲圖:螢幕距離 ∝ RTT(無壓縮/炸開)。最長 '+pr+' ≈ '+Math.round(mx/fpk).toLocaleString()+' km;metro 太近請放大看。');
 }
-// ── 地圖真實比例(Equal Earth 等積投影,中央經線 λ0=140°E)── 兩級座標:city 查不到→退國家中心點→再退鄰居平均。
-// 北朝上、東朝右;Equal Earth 等積 → 面積比例忠實(優於裸 equirectangular 高緯東西向過寬)。不去重疊(近城市自然相疊,設計上交給人手動拖開)。
-// GEO_CITY 來源 = working/gen.mjs 的 GEO(已驗證)+ rtt.js cityRef 出現的真實城市,皆 [lat, lon]。
-const GEO_CITY = {
-  // gen.mjs GEO(PoP 級,含合成 PoP 變體)
-  TPE:[25.0,121.5], KHH:[22.6,120.3], TYO:[35.7,139.7], OSA:[34.7,135.5],
-  SHA:[31.2,121.5], HKG:[22.3,114.2], SIN:[1.35,103.8],
-  TPE2:[25.1,121.6], TYN:[25.0,121.2], TCH:[24.1,120.7], HSZ:[24.8,121.0],
-  TYO2:[35.6,139.8], NGO:[35.2,136.9], FUK:[33.6,130.4],
-  PEK:[39.9,116.4], CAN:[23.1,113.3], SZX:[22.5,114.1], CTU:[30.6,104.1],
-  WUH:[30.6,114.3], HKG2:[22.3,114.1], HKG3:[22.4,114.2],
-  SIN2:[1.30,103.9], SIN3:[1.40,103.7],
-  LAX:[34.0,-118.2], SJC:[37.3,-121.9], SEA:[47.6,-122.3], JFK:[40.6,-73.8],
-  IAD:[38.95,-77.45], ORD:[41.98,-87.9], DAL:[32.8,-96.8], ATL:[33.7,-84.4],
-  LHR:[51.47,-0.45], LHR2:[51.5,-0.1], MAN:[53.4,-2.2],
-  FRA:[50.0,8.6], FRA2:[50.1,8.7], MUC:[48.1,11.6],
-  SYD:[-33.9,151.2], MEL:[-37.8,144.9], PER:[-31.95,115.9], BNE:[-27.5,153.0],
-  BOM:[19.1,72.9], DEL:[28.6,77.1], MAA:[13.1,80.3], BLR:[13.0,77.6],
-  // 都會別名(gen.mjs CITY 映射:JFK→NYC、ORD→CHI、DAL→DFW、LHR→LON、IAD→WAS、PEK→BJS、TCH→TXG)
-  NYC:[40.71,-74.0], CHI:[41.88,-87.63], DFW:[32.78,-96.8], LON:[51.5,-0.13],
-  WAS:[38.9,-77.04], BJS:[39.9,116.4], TXG:[24.15,120.67],
-  // rtt.js cityRef 出現、上面未含的真實城市
-  AMS:[52.37,4.9], ATH:[37.98,23.73], BER:[52.52,13.4], BKK:[13.75,100.5],
-  BRU:[50.85,4.35], CPH:[55.68,12.57], DUB:[53.35,-6.26], HAN:[21.03,105.85],
-  HEL:[60.17,24.94], IST:[41.0,28.98], DXB:[25.2,55.27], MAD:[40.42,-3.7],
-  MIL:[45.46,9.19], OSL:[59.91,10.75], PAR:[48.85,2.35], SEL:[37.57,126.98],
-  SGN:[10.82,106.63], JKT:[-6.2,106.85], KUL:[3.14,101.69], MNL:[14.6,120.98],
-  // 匯入 OSPF 對應表新增城市(VCV→溫哥華、TRT→多倫多、CB→金邊、PA→Palo Alto)
-  YVR:[49.28,-123.12], YYZ:[43.65,-79.38], PNH:[11.56,104.92], PAO:[37.44,-122.14],
-};
-// City → Country 對照(SSOT:從 ospf-import.js 的 OSPF_CITY 反推,不重複維護)。
-// Inspector 選城市後自動帶入 Country;仍可手動覆蓋(新城市 / 特殊情況)。
-const CITY_COUNTRY = {};
-(()=>{ const M={TPE:'TW',TXG:'TW',KHH:'TW',HSZ:'TW',HKG:'HK',SIN:'SG',TYO:'JP',OSA:'JP',
-  SEL:'KR',BKK:'TH',MNL:'PH',SYD:'AU',HAN:'VN',PNH:'KH',SHA:'CN',SZX:'CN',
-  LAX:'US',CHI:'US',NYC:'US',PAO:'US',LON:'GB',FRA:'DE',AMS:'NL',YVR:'CA',YYZ:'CA',
-  // 延伸城市
-  LHR:'GB',MAN:'GB',MUC:'DE',ATH:'GR',BER:'DE',BRU:'BE',CPH:'DK',DUB:'IE',HEL:'FI',
-  IST:'TR',DXB:'AE',MAD:'ES',MIL:'IT',OSL:'NO',PAR:'FR',SEL:'KR',SGN:'VN',
-  JKT:'ID',KUL:'MY',BOM:'IN',DEL:'IN',MAA:'IN',BLR:'IN',
-  MEL:'AU',PER:'AU',BNE:'AU',JFK:'US',IAD:'US',ORD:'US',DAL:'US',SEA:'US',ATL:'US',SJC:'US',
-  PEK:'CN',CAN:'CN',CTU:'CN',WUH:'CN',BJS:'CN',FUK:'JP',NGO:'JP',TYN:'TW',TCH:'TW',TPE2:'TW',TYO2:'JP',
-  };
-  Object.assign(CITY_COUNTRY, M);
-})();
-
-// 國家中心點(ISO-3166-1 alpha-2),供 city 查不到時 fallback。皆 [lat, lon]。
+// ── 城市地理資料(gravity.js SSOT)──────────────────────────────────────────
+// GEO_CITY / CITY_COUNTRY 已整合至 output/gravity.js;此處建立相容別名。
+// Proxy 讓舊式 GEO_CITY[c][0]/[1] 和新式 .lat/.lon 都能用。
+const GEO_CITY = new Proxy(GRAVITY_CITY_GEO, {
+  get(t,k){ const v=t[k]; if(!v) return undefined; return { 0:v.lat, 1:v.lon, lat:v.lat, lon:v.lon, country:v.country }; }
+});
+const CITY_COUNTRY = Object.fromEntries(
+  Object.entries(GRAVITY_CITY_GEO).map(([k,v])=>[k,v.country])
+);
+// 國家中心點(fallback)— 保留舊 [lat,lon] 格式供 Equal Earth 用
 const GEO_COUNTRY = {
   TW:[23.7,121.0], JP:[36.2,138.3], CN:[35.9,104.2], HK:[22.3,114.2], SG:[1.35,103.8],
   US:[39.8,-98.6], GB:[54.0,-2.0], UK:[54.0,-2.0], DE:[51.2,10.4], FR:[46.6,2.4],
   NL:[52.1,5.3], AU:[-25.3,133.8], IN:[22.0,79.0], KR:[36.5,127.8], TH:[15.0,101.0],
   VN:[16.0,107.8], ID:[-2.5,118.0], MY:[4.2,101.9], PH:[12.9,121.8], AE:[24.0,54.0],
   GR:[39.0,22.0], ES:[40.0,-4.0], IT:[42.8,12.8], BE:[50.6,4.6], TR:[39.0,35.0],
-  KH:[12.57,104.99], CA:[56.13,-106.35],
+  KH:[12.57,104.99], CA:[56.13,-106.35], RU:[61.0,105.0], IL:[31.5,34.75],
+  SA:[24.0,45.0], MM:[19.0,96.5], LK:[7.5,80.7], BD:[24.0,90.4], NZ:[-42.0,174.0], GU:[13.5,144.8],
 };
 // Equal Earth 前向投影(Šavrič, Patterson & Jenny 2018)。輸入 lat/lon(度),λ 相對中央經線 λ0;
 // 回傳無因次 x/y(地球半徑=1),等積。除以 EE_DEG 換算成「赤道每經度≈1 單位」尺度,讓下游
@@ -1502,7 +1467,7 @@ $('btnExport').onclick=()=>{
 // ════════════════════════════════════════════════════════════════════════
 let D = { unit:'Gbps', source:'synthetic', timestamp:'', active:'', profiles:{} };
 let S = [];
-let R = { unit:'ms', note:'', fiberRttPerKm:0.01014, timestamp:'', matrix:{}, cityRef:[], edges:[] };  // cityRef 唯讀保留(匯入時存在但不提供 UI 編輯)
+let R = { unit:'ms', note:'', fiberRttPerKm:0.01014, timestamp:'', matrix:{}, edges:[] };
 let TAB = 'topo', dmSel = null;
 const parseGlobal = (src,name)=>Function('"use strict";'+src+';return '+name+';')();
 const dl = (name,text)=>{ const b=new Blob([text],{type:'text/javascript'}); const a=document.createElement('a');
@@ -1728,9 +1693,6 @@ function exportRtt(){
     L.push('    '+a+': { '+inner+' },');
   }
   L.push('  },','');
-  L.push('  cityRef: [');
-  L.push((R.cityRef||[]).map(r=>'    { a: '+q(r.a)+', b: '+q(r.b)+', rtt: '+pf(r.rtt,2)+' }').join(',\n'));
-  L.push('  ],','');
   L.push('  edges: [');
   L.push((R.edges||[]).map(r=>'    { a: '+q(r.a)+', b: '+q(r.b)+', rtt: '+pf(r.rtt,2)+', src: '+q(r.src)+' }').join(',\n'));
   L.push('  ],','};','',"if (typeof module !== 'undefined') module.exports = { rtt };",'');

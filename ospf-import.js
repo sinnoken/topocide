@@ -8,15 +8,39 @@
 //   • 解析靠「LSA 欄位角色」區分 RID 與介面 IP(兩者都長得像 IP)。capacity 無從得知 → placeholder。
 // ════════════════════════════════════════════════════════════════════════
 
+import { CITY_GEO } from './gravity.js';
+
 export const OSPF_PLACEHOLDER_CAP = 1;   // 預設 1G(Gbps,與 demand 同單位)— OSPF 不帶頻寬,占位,匯入後策展填真值
 
-// hostname 前綴 → [城市3碼, 國家]。前綴 = 第一段去尾數字(TP3→TP, NY3→NY, CNSH3→CNSH)。
+// hostname 前綴 → city code(IATA 都會碼)。country 從 CITY_GEO 查(gravity.js SSOT)。
+// 前綴 = 第一段去尾數字(TP3→TP, NY3→NY, CNSH3→CNSH)
 export const OSPF_CITY = {
-  TP:['TPE','TW'], TC:['TXG','TW'], KS:['KHH','TW'], PCPD:['TPE','TW'], ZS:['HSZ','TW'],
-  HK:['HKG','HK'], SG:['SIN','SG'], JP:['TYO','JP'], JPOS:['OSA','JP'], KR:['SEL','KR'],
-  THAI:['BKK','TH'], PHIL:['MNL','PH'], AUST:['SYD','AU'], VN:['HAN','VN'], CB:['PNH','KH'],
-  CNSH:['SHA','CN'], CNSZ:['SZX','CN'], LA:['LAX','US'], CHI:['CHI','US'], NY:['NYC','US'],
-  PA:['PAO','US'], VCV:['YVR','CA'], TRT:['YYZ','CA'], LD:['LON','GB'], FKT:['FRA','DE'], AMS:['AMS','NL'],
+  TP:   'TPE',  // 台北
+  TC:   'TXG',  // 台中
+  KS:   'KHH',  // 高雄
+  PCPD: 'TPE',  // 板橋(台北都會)
+  ZS:   'HSZ',  // 新竹
+  HK:   'HKG',  // 香港
+  SG:   'SIN',  // 新加坡
+  JP:   'TYO',  // 東京
+  JPOS: 'OSA',  // 大阪
+  KR:   'SEL',  // 首爾
+  THAI: 'BKK',  // 曼谷
+  PHIL: 'MNL',  // 馬尼拉
+  AUST: 'SYD',  // 雪梨
+  VN:   'HAN',  // 河內
+  CB:   'PNH',  // 金邊
+  CNSH: 'SHA',  // 上海
+  CNSZ: 'SZX',  // 深圳
+  LA:   'LAX',  // 洛杉磯
+  CHI:  'CHI',  // 芝加哥
+  NY:   'NYC',  // 紐約
+  PA:   'PAO',  // Palo Alto
+  VCV:  'YVR',  // 溫哥華
+  TRT:  'YYZ',  // 多倫多
+  LD:   'LON',  // 倫敦
+  FKT:  'FRA',  // 法蘭克福
+  AMS:  'AMS',  // 阿姆斯特丹
 };
 
 export function ospfMaskToPrefix(m){
@@ -29,8 +53,11 @@ export const ospfSid = rid => rid.replace(/\./g,'_');
 export function ospfGuessCity(hostname){
   if(!hostname) return null;
   const base=hostname.split('_')[0].replace(/\d+$/,'');        // 第一段去尾數字
-  const hit=OSPF_CITY[base];
-  if(hit) return { city:hit[0], country:hit[1] };
+  const city=OSPF_CITY[base];
+  if(city){
+    const country = CITY_GEO[city]?.country ?? '';             // country 從 CITY_GEO 查(SSOT)
+    return { city, country };
+  }
   return { city:base.slice(0,4).toUpperCase()||'UNK', country:'' };  // fallback:前綴當城市碼
 }
 
@@ -106,7 +133,10 @@ export function parseOspfLsdb(lsdbText, ridMapText){
     if(r.rid===a) e.ab=l.metric; else e.ba=l.metric; pairs.set(k,e);
   }
   for(const e of pairs.values()){ const a=idOf(e.a),b=idOf(e.b);
-    edges.push({ id:mkId(a,b), source:a, target:b, cost:e.ab??e.ba, costRev:e.ba??e.ab, capacity:OSPF_PLACEHOLDER_CAP, type:'p2p' }); }
+    const cost=e.ab??e.ba, costRev=e.ba??e.ab;
+    const rec={ id:mkId(a,b), source:a, target:b, cost, capacity:OSPF_PLACEHOLDER_CAP, type:'p2p' };
+    if(costRev !== cost) rec.costRev=costRev;   // 對齊 gen.mjs:對稱邊不輸出 costRev
+    edges.push(rec); }
   const trueP2P=pairs.size;
   // (2) transit nets:2 成員收斂為 p2p(帶 net 追溯);≥3 成員建 pseudonode + transit 邊
   const pnNodes=[]; let collapsed=0, multiAccess=0;
@@ -114,7 +144,10 @@ export function parseOspfLsdb(lsdbText, ridMapText){
     const costOf=rid=>routers.get(rid)?.transit.find(t=>t.dr===net.dr)?.metric;
     if(net.members.length===2){
       const [r0,r1]=net.members, a=idOf(r0), b=idOf(r1);
-      edges.push({ id:mkId(a,b), source:a, target:b, cost:costOf(r0), costRev:costOf(r1), capacity:OSPF_PLACEHOLDER_CAP, type:'p2p', net:net.dr+'/'+net.prefix });
+      const cost=costOf(r0), costRev=costOf(r1);
+      const rec={ id:mkId(a,b), source:a, target:b, cost, capacity:OSPF_PLACEHOLDER_CAP, type:'p2p', net:net.dr+'/'+net.prefix };
+      if(costRev !== cost) rec.costRev=costRev;   // 對齊 gen.mjs:對稱邊不輸出 costRev
+      edges.push(rec);
       collapsed++;
     } else if(net.members.length>=3){
       const pnId='PN_'+ospfSid(net.dr);

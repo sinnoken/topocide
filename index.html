@@ -394,7 +394,7 @@
       </div>
       <!-- 共用區:點格說明 + ECMP/非對稱符號(兩種模式都適用)-->
       <div class="hint">
-        <span data-i18n="c2.hintCommon">點任一格查看路徑詳情並在圖上高亮。</span>
+        <span data-i18n="c2.hintCommon">點任一格查看路徑詳情並在圖上高亮。點擊後可用 ↑↓←→ 鍵盤導覽。</span>
         <div class="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 items-center">
           <span class="text-center font-bold text-blue-800">²</span>
           <span data-i18n="c2.legend.ecmp">= 等成本路徑數(ECMP)</span>
@@ -608,6 +608,7 @@ import {
   ecmpBackupScanAll,
   detectAsymmetric, computeHeatmap, computeN1WorstCase,
   evalCongestion, buildWeightBounds, optimizeWeights,
+  impliedCostFromRtt, RTT_COST_CLAMP, RTT_COST_DIVISOR,
 } from './engine.js';
 import { baseGraphStyle } from './graph-style.js';
 
@@ -2852,7 +2853,7 @@ const C10_Edges = (() => {
   // 註:當前 topology.js 的 cost 即「人為/有效值」(編輯基準),參考晶片不會自動覆寫它。
   const RTT_OK  = typeof rtt !== 'undefined' && rtt && Array.isArray(rtt.edges);
   const FIBER_RTT_PER_KM = (RTT_OK && rtt.fiberRttPerKm) ? rtt.fiberRttPerKm : 0.01014;
-  const COST_DIV = FIBER_RTT_PER_KM * 90;
+  const COST_DIV = FIBER_RTT_PER_KM * RTT_COST_DIVISOR;   // RTT_COST_DIVISOR from engine.js SSOT
   // 把實際常數填入說明區公式(避免在靜態 HTML 寫死可變 dataset 數值)。
   // 包成函式並在 render() 呼叫:i18n 重填 hint(data-i18n-html)會重建這兩個 span,需重填。
   function fillRttConsts() {
@@ -2871,8 +2872,8 @@ const C10_Edges = (() => {
     rttByPair.set(r.a + '|' + r.b, r);
     rttByPair.set(r.b + '|' + r.a, r);
   }
-  // 成本公式與 gen.py 一致:cost = clamp(round(rtt / (fiberRttPerKm × 90)), 5, 250)
-  const impliedCost = ms => Math.max(5, Math.min(250, Math.round(ms / COST_DIV)));
+  // 成本公式 SSOT → engine.js impliedCostFromRtt;此處綁定 runtime FIBER_RTT_PER_KM
+  const impliedCost = ms => impliedCostFromRtt(ms, FIBER_RTT_PER_KM);
   function edgeRef(e) {
     if (!RTT_OK || e.type !== 'p2p') return null;
     const r = rttByPair.get(e.source + '|' + e.target);

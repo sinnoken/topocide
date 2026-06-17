@@ -730,8 +730,19 @@ export function applyWeights(topo, weights) {
 // conflict = lo>hi(紅線矛盾,夾在 current);frozen = lo>=hi(不進鄰域)。key 為權重變數鍵。
 // OSPF cost 夾值範圍(單一事實)— 優化器界與 binding 放鬆共用。上限 500(≈456ms / 45,000km),
 // 足以涵蓋任何單條跨洋電路,避免長鏈路 RTT 下限頂到天花板被 frozen(lo>hi),給優化器繞路調整空間;
-// 仍遠低於 OSPF 16-bit 上限(65535)。下限 5。註:此為「優化器可調範圍」,與 impliedCost 的 RTT 建議夾值無關。
+// 仍遠低於 OSPF 16-bit 上限(65535)。下限 5。
+// 注意:此為「優化器可調範圍」[5,500];RTT 換算初始 cost 的夾值為 RTT_COST_CLAMP [5,250](見下)。
+// 兩者刻意不同:生成時不需要 500(超長鏈路可以調高讓優化器再調);優化器需要 500 的空間給繞路。
 export const COST_CLAMP = [5, 500];
+
+// RTT → OSPF cost 換算常數(SSOT):gen.mjs / index.html 共用。
+// 公式:cost = clamp( round( RTT_ms ÷ (fiberRttPerKm × RTT_COST_DIVISOR) ), ...RTT_COST_CLAMP )
+export const RTT_COST_DIVISOR = 90;        // 分母常數(可視為「每幾 ms RTT 對應 1 級 cost」)
+export const RTT_COST_CLAMP   = [5, 250];  // 生成時夾值:下限 5(太短不低於 5)、上限 250(跨洋不超 250)
+export function impliedCostFromRtt(ms, fiberRttPerKm) {
+  return Math.max(RTT_COST_CLAMP[0], Math.min(RTT_COST_CLAMP[1],
+    Math.round(ms / (fiberRttPerKm * RTT_COST_DIVISOR))));
+}
 
 export function buildWeightBounds(topo, {
   rttFloor = new Map(), vip = new Set(), protectedSet = new Set(), clamp = COST_CLAMP,
