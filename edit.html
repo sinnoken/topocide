@@ -326,7 +326,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
 import { buildAdjacency, connectedComponents } from './engine.js';
 import { baseGraphStyle } from './graph-style.js';
 import { parseOspfLsdb, OSPF_PLACEHOLDER_CAP } from './ospf-import.js';   // 共用 OSPF 解析(與 working/ospf_to_topology.mjs 同源)
-import { CITY_GEO as GRAVITY_CITY_GEO } from './gravity.js';               // 城市地理資料 SSOT
+import { CITY_GEO as GRAVITY_CITY_GEO, CITY_NAME } from './gravity.js';    // 城市地理資料 + 英文名稱 SSOT
 // ════════════════════════════════════════════════════════════════════════
 // BlastRadius Topology Editor — 自包含 Cytoscape 編輯器(zero-build)。
 // 依賴:cytoscape core + cxtmenu(右鍵)。建邊與 undo/redo 自寫,不用易碎外掛。
@@ -863,9 +863,9 @@ function layoutGeoMap(){
     if(p){ ll[n.id()]=p; placed.push(n); } else unplaced.push(n);
   });
   if(!placed.length){ toast('無 city/country 座標可用,無法畫地圖'); return; }
-  // 投影:Equal Earth 等積(中央經線 λ0=140°E,太平洋置中 → 美洲落在亞洲右側,經度包繞處理)。
+  // 投影:Equal Earth 等積(中央經線 λ0=150°E,太平洋置中 → 美洲落在亞洲右側,seam 在大西洋 -30°W)。
   // 除以 EE_DEG → u/v 回到「赤道每經度≈1」度量,沿用下游比例尺/門檻常數;螢幕 y 向下故 v 取負(北朝上)。
-  const LON0=140;
+  const LON0=150;  // λ0=150°E：亞太電信業界慣例(ITU/Telegeography)，seam 在 -30°W(大西洋)，美洲完整落右側
   const proj={}; placed.forEach(n=>{ const [lat,lon]=ll[n.id()]; const e=equalEarth(lat,lon,LON0);
     proj[n.id()]={ u:e.x/EE_DEG, v:-e.y/EE_DEG }; });
   // 自動比例尺(等同 d3 fitSize 思路,但鎖定「最密城市群」而非整體外框):
@@ -907,7 +907,7 @@ function layoutGeoMap(){
   const outliers=all.length-core.length;
   cy.animate({ fit:{ eles:core, padding:60 }, duration:350 });
   const byCity=placed.filter(n=>{ const c=n.data('city'); return c&&GEO_CITY[c]; }).length;
-  toast('Equal Earth(λ0=140°E)鎖定主城市群:'+byCity+' 城市座標、'+(placed.length-byCity)+' 國家中心、'+unplaced.length+' 沿鄰居'+(outliers?';'+outliers+' 跨洋遠點在畫布外(拖曳/滾輪查看)':'')+';重疊請手動拖開。');
+  toast('Equal Earth(λ0=150°E)鎖定主城市群:'+byCity+' 城市座標、'+(placed.length-byCity)+' 國家中心、'+unplaced.length+' 沿鄰居'+(outliers?';'+outliers+' 跨洋遠點在畫布外(拖曳/滾輪查看)':'')+';重疊請手動拖開。');
 }
 // ── 地鐵圖佈局(Metro Map / Octilinearization) ──────────────────────────────
 // 三步驟:Equal Earth 投影種子 → 格點量化 → 八向微調(Octilinear Nudge)。
@@ -929,7 +929,7 @@ function layoutMetroMap(){
   });
   if(!placed.length){ toast('無城市座標,無法執行地鐵圖佈局'); return; }
 
-  const LON0=140;
+  const LON0=150;  // λ0=150°E：亞太電信業界慣例(ITU/Telegeography)，seam 在 -30°W(大西洋)，美洲完整落右側
   const proj={};
   placed.forEach(n=>{ const [lat,lon]=ll[n.id()]; const e=equalEarth(lat,lon,LON0);
     proj[n.id()]={u:e.x/EE_DEG, v:-e.y/EE_DEG}; });
@@ -1127,7 +1127,7 @@ function runLayout(name){
   if(name==='mds') return layoutMDS();           // 自訂:非 cytoscape plugin,用 rtt.matrix 跑 MDS
   if(name==='cluster-rtt') return layoutClusterRTT();  // 自訂:RTT 分群 + 群間炸開(兩尺度)
   if(name==='latency-map') return layoutLatencyMap();  // 自訂:raw-RTT MDS 真比例圖(忠實物理,無壓縮)
-  if(name==='geo-map') return layoutGeoMap();          // 自訂:Equal Earth 等積投影(λ0=140°E),city→country 兩級 fallback,北朝上
+  if(name==='geo-map') return layoutGeoMap();          // 自訂:Equal Earth 等積投影(λ0=150°E),city→country 兩級 fallback,北朝上
   if(name==='metro-map') return layoutMetroMap();      // 自訂:Equal Earth 種子 → 格點量化 → 八向微調(Octilinearization)
   if(name==='dagre-rtt') return layoutDagreAdaptive();  // 自訂:dagre + RTT/area/country 後處理
   if(name==='breadthfirst-adaptive') return layoutBreadthfirstAdaptive();  // 自訂:資料挑 root + depthSort
@@ -1266,7 +1266,9 @@ cy.on('free','node',(e)=>{
 // City 在左:datalist 建議(GEO_CITY 的所有城市碼);選完後查 CITY_COUNTRY 自動帶入 Country。
 // Country 在右:仍可手動覆蓋(新城市 / 特殊情況)。
 function cityCityRow(city, country){
-  const cityOpts=Object.keys(GEO_CITY).sort().map(c=>`<option value="${esc(c)}">`).join('');
+  const cityOpts=Object.keys(GEO_CITY).sort().map(c=>{
+    const nm=CITY_NAME[c]; return nm?`<option value="${esc(c)}">${esc(c)} — ${esc(nm)}</option>`:`<option value="${esc(c)}">`;
+  }).join('');
   return `<datalist id="dl_city_codes">${cityOpts}</datalist>
     <div class="row2">
       <div class="field"><label>City</label>

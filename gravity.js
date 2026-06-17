@@ -77,6 +77,35 @@ export const CITY_GEO = {
   DLC: { lat:38.92,  lon:121.63, country:'CN' },  // 大連
   SHE: { lat:41.80,  lon:123.43, country:'CN' },  // 瀋陽
   TAO: { lat:36.06,  lon:120.38, country:'CN' },  // 青島
+  // ── 機場碼別名(airport code → 同都會區,供查表用;與都會碼並存不衝突) ───────
+  // 亞洲
+  PEK: { lat:40.08,  lon:116.60, country:'CN' },  // 北京首都機場(BJS 別名)
+  PVG: { lat:31.14,  lon:121.81, country:'CN' },  // 上海浦東機場(SHA 別名)
+  NRT: { lat:35.77,  lon:140.39, country:'JP' },  // 東京成田機場(TYO 別名)
+  HND: { lat:35.55,  lon:139.78, country:'JP' },  // 東京羽田機場(TYO 別名,較近市區)
+  ICN: { lat:37.46,  lon:126.44, country:'KR' },  // 首爾仁川機場(SEL 別名)
+  KIX: { lat:34.43,  lon:135.24, country:'JP' },  // 大阪關西機場(OSA 別名)
+  CGK: { lat:-6.12,  lon:106.65, country:'ID' },  // 雅加達蘇加諾-哈達機場(JKT 別名)
+  // 歐洲
+  LHR: { lat:51.48,  lon:-0.45,  country:'GB' },  // 倫敦希斯洛機場(LON 別名)
+  LGW: { lat:51.15,  lon:-0.18,  country:'GB' },  // 倫敦蓋威克機場(LON 別名)
+  CDG: { lat:49.01,  lon:2.55,   country:'FR' },  // 巴黎戴高樂機場(PAR 別名)
+  FCO: { lat:41.80,  lon:12.24,  country:'IT' },  // 羅馬菲烏米奇諾機場(ROM 別名)
+  MXP: { lat:45.63,  lon:8.72,   country:'IT' },  // 米蘭馬爾彭薩機場(MIL 別名)
+  ARN: { lat:59.65,  lon:17.92,  country:'SE' },  // 斯德哥爾摩阿蘭達機場(STO 別名)
+  BER: { lat:52.35,  lon:13.50,  country:'DE' },  // 柏林布蘭登堡機場(新機場,2020)
+  PRG: { lat:50.10,  lon:14.26,  country:'CZ' },  // 布拉格瓦茨拉夫哈維爾機場
+  BUD: { lat:47.44,  lon:19.26,  country:'HU' },  // 布達佩斯費倫茨李斯特機場
+  // 美洲
+  JFK: { lat:40.64,  lon:-73.78, country:'US' },  // 紐約 JFK 機場(NYC 別名)
+  EWR: { lat:40.69,  lon:-74.17, country:'US' },  // 紐瓦克機場(NYC 別名)
+  DCA: { lat:38.85,  lon:-77.04, country:'US' },  // 華盛頓雷根機場(WAS 別名)
+  ORD: { lat:41.98,  lon:-87.91, country:'US' },  // 芝加哥 O'Hare 機場(CHI 別名)
+  IAD: { lat:38.94,  lon:-77.45, country:'US' },  // 華盛頓杜勒斯機場(WAS 別名)
+  SFO: { lat:37.62,  lon:-122.37,country:'US' },  // 舊金山機場(灣區,不同於 SJC/PAO)
+  SAO: { lat:-23.55, lon:-46.63, country:'BR' },  // 聖保羅都會碼(GRU/CGH 機場的城市碼)
+  // 南亞
+  KHI: { lat:24.91,  lon:67.16,  country:'PK' },  // 喀拉蚩眞納機場
   // ── 香港 ──────────────────────────────────────────────────────────────────
   HKG: { lat:22.3,   lon:114.2,  country:'HK' },  // 香港
   // ── 新加坡 ────────────────────────────────────────────────────────────────
@@ -91,6 +120,24 @@ export const CITY_GEO = {
   SUB: { lat:-7.25,  lon:112.75, country:'ID' },  // 泗水
   RGN: { lat:16.87,  lon:96.18,  country:'MM' },  // 仰光
   PNH: { lat:11.56,  lon:104.92, country:'KH' },  // 金邊
+  // ── 中國補充(骨幹常見二線城市) ───────────────────────────────────────────
+  CKG: { lat:29.59,  lon:106.55, country:'CN' },  // 重慶
+  CGO: { lat:34.52,  lon:113.84, country:'CN' },  // 鄭州
+  KMG: { lat:25.11,  lon:102.74, country:'CN' },  // 昆明(東南亞出口要道)
+  XIY: { lat:34.44,  lon:108.75, country:'CN' },  // 西安
+  HRB: { lat:45.75,  lon:126.25, country:'CN' },  // 哈爾濱
+  URC: { lat:43.91,  lon:87.47,  country:'CN' },  // 烏魯木齊
+  // ── 韓國補充 ───────────────────────────────────────────────────────────────
+  GMP: { lat:37.56,  lon:126.80, country:'KR' },  // 首爾金浦機場(市區內,SEL 別名)
+  CJU: { lat:33.51,  lon:126.49, country:'KR' },  // 濟州島
+  // ── 日本補充 ───────────────────────────────────────────────────────────────
+  CTS: { lat:42.77,  lon:141.69, country:'JP' },  // 札幌千歲機場(北海道)
+  SPK: { lat:43.06,  lon:141.35, country:'JP' },  // 札幌都會碼(CTS 別名)
+  // ── 美國補充 ───────────────────────────────────────────────────────────────
+  PHL: { lat:39.87,  lon:-75.24, country:'US' },  // 費城
+  RDU: { lat:35.88,  lon:-78.79, country:'US' },  // 羅利-達拉姆(北卡,科技走廊)
+  OAK: { lat:37.72,  lon:-122.22,country:'US' },  // 奧克蘭(灣區 SFO 別名)
+  BWI: { lat:39.18,  lon:-76.67, country:'US' },  // 巴爾的摩/華盛頓(WAS 別名)
   // ── 南亞 ──────────────────────────────────────────────────────────────────
   BOM: { lat:19.1,   lon:72.9,   country:'IN' },  // 孟買
   DEL: { lat:28.6,   lon:77.1,   country:'IN' },  // 德里
@@ -167,7 +214,7 @@ export const CITY_GEO = {
   MEX: { lat:19.43,  lon:-99.13, country:'MX' },  // 墨西哥市
   GRU: { lat:-23.43, lon:-46.47, country:'BR' },  // 聖保羅
   GIG: { lat:-22.81, lon:-43.25, country:'BR' },  // 里約熱內盧
-  FOR: { lat:-3.78,  lon:-40.55, country:'BR' },  // 福塔雷薩(lon 微調至 seam 40°W 右側，避免 LON0=140°E 投影跑到歐洲左邊)
+  FOR: { lat:-3.78,  lon:-38.53, country:'BR' },  // 福塔雷薩
   POA: { lat:-29.98, lon:-51.18, country:'BR' },  // 阿雷格里港
   BOG: { lat:4.70,   lon:-74.14, country:'CO' },  // 波哥大
   LIM: { lat:-12.02, lon:-77.10, country:'PE' },  // 利馬
@@ -194,6 +241,56 @@ export const CITY_GEO = {
   CHC: { lat:-43.49, lon:172.54, country:'NZ' },  // 基督城
   // ── 太平洋 ────────────────────────────────────────────────────────────────
   GUM: { lat:13.48,  lon:144.80, country:'GU' },  // 關島
+};
+
+// ── 城市英文顯示名稱(UI 層用;資料生成不需要) ─────────────────────────────────
+// city code → English display name。供 edit.html Inspector datalist、
+// index.html tooltip 等 UI 消費;gen.mjs / companions / ospf-import 不 import 此表。
+export const CITY_NAME = {
+  TPE:'Taipei',       TXG:'Taichung',      KHH:'Kaohsiung',     HSZ:'Hsinchu',
+  TYO:'Tokyo',        OSA:'Osaka',         NGO:'Nagoya',        FUK:'Fukuoka',
+  OKA:'Okinawa',      SDJ:'Sendai',        HIJ:'Hiroshima',     CTS:'Sapporo',       SPK:'Sapporo',
+  SEL:'Seoul',        PUS:'Busan',         GMP:'Seoul (Gimpo)', CJU:'Jeju',
+  ICN:'Seoul',        KIX:'Osaka',
+  SHA:'Shanghai',     BJS:'Beijing',       CAN:'Guangzhou',     SZX:'Shenzhen',
+  CTU:'Chengdu',      WUH:'Wuhan',         NKG:'Nanjing',       HGH:'Hangzhou',
+  XMN:'Xiamen',       TSN:'Tianjin',       DLC:'Dalian',        SHE:'Shenyang',
+  TAO:'Qingdao',      CKG:'Chongqing',     CGO:'Zhengzhou',     KMG:'Kunming',
+  XIY:"Xi'an",        HRB:'Harbin',        URC:'Urumqi',
+  PEK:'Beijing',      PVG:'Shanghai',      NRT:'Tokyo',         HND:'Tokyo (Haneda)',
+  HKG:'Hong Kong',    SIN:'Singapore',
+  BKK:'Bangkok',      MNL:'Manila',        HAN:'Hanoi',         SGN:'Ho Chi Minh City',
+  KUL:'Kuala Lumpur', JKT:'Jakarta',       CGK:'Jakarta',       SUB:'Surabaya',
+  RGN:'Yangon',       PNH:'Phnom Penh',
+  BOM:'Mumbai',       DEL:'Delhi',         MAA:'Chennai',       BLR:'Bangalore',
+  CCU:'Kolkata',      HYD:'Hyderabad',     CMB:'Colombo',       DAC:'Dhaka',     KHI:'Karachi',
+  DXB:'Dubai',        DOH:'Doha',          IST:'Istanbul',      TLV:'Tel Aviv',  RUH:'Riyadh',
+  SVO:'Moscow',       LED:'St. Petersburg',
+  LON:'London',       LHR:'London',        LGW:'London (Gatwick)', MAN:'Manchester',
+  FRA:'Frankfurt',    MUC:'Munich',        HAM:'Hamburg',       BER:'Berlin',
+  AMS:'Amsterdam',    PAR:'Paris',         CDG:'Paris',         BRU:'Brussels',
+  MAD:'Madrid',       BCN:'Barcelona',     LIS:'Lisbon',
+  MIL:'Milan',        MXP:'Milan',         ROM:'Rome',          FCO:'Rome',
+  ATH:'Athens',       VIE:'Vienna',        ZRH:'Zurich',        WAW:'Warsaw',
+  STO:'Stockholm',    ARN:'Stockholm',     CPH:'Copenhagen',    OSL:'Oslo',
+  HEL:'Helsinki',     DUB:'Dublin',        PRG:'Prague',        BUD:'Budapest',
+  LAX:'Los Angeles',  SFO:'San Francisco', SJC:'San Jose',      PAO:'Palo Alto',
+  SEA:'Seattle',      PDX:'Portland',      SAN:'San Diego',
+  LAS:'Las Vegas',    PHX:'Phoenix',       DEN:'Denver',        SLC:'Salt Lake City',
+  NYC:'New York',     JFK:'New York',      EWR:'Newark',        BOS:'Boston',
+  WAS:'Washington',   DCA:'Washington',    IAD:'Washington',
+  CHI:'Chicago',      ORD:'Chicago',       MSP:'Minneapolis',   DTW:'Detroit',
+  DFW:'Dallas',       ATL:'Atlanta',       MIA:'Miami',         MCO:'Orlando',
+  TPA:'Tampa',        CLT:'Charlotte',     BNA:'Nashville',     MSY:'New Orleans',
+  HNL:'Honolulu',     PHL:'Philadelphia',  RDU:'Raleigh-Durham',OAK:'Oakland',   BWI:'Baltimore',
+  YVR:'Vancouver',    YYZ:'Toronto',       YUL:'Montreal',      YEG:'Edmonton',
+  MEX:'Mexico City',  GRU:'São Paulo',     SAO:'São Paulo',     GIG:'Rio de Janeiro',
+  FOR:'Fortaleza',    POA:'Porto Alegre',  BOG:'Bogotá',        LIM:'Lima',
+  SCL:'Santiago',     EZE:'Buenos Aires',  PTY:'Panama City',   CCS:'Caracas',
+  JNB:'Johannesburg', CPT:'Cape Town',     CAI:'Cairo',         LOS:'Lagos',
+  NBO:'Nairobi',      CMN:'Casablanca',    LAD:'Luanda',        DAR:'Dar es Salaam',
+  SYD:'Sydney',       MEL:'Melbourne',     PER:'Perth',         BNE:'Brisbane',
+  ADL:'Adelaide',     AKL:'Auckland',      CHC:'Christchurch',  GUM:'Guam',
 };
 
 // ── haversine 大圈距離(km)── city geo 兩點間 ───────────────────────────────
