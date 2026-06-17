@@ -207,28 +207,28 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
     <button class="btn danger" data-g="edit" id="btnDelete" title="刪除目前選取的節點或鏈路 (Del)">🗑 刪除 <span class="k">Del</span></button>
     <button class="btn" data-g="view" id="btnSnap" title="格點吸附(Metro Map grid)">⊞ Snap</button>
     <select class="btn" data-g="view" id="layoutSel" title="佈局演算法" style="padding-left:8px;padding-right:8px">
-      <optgroup label="地理 / RTT">
-        <option value="geo-map" selected>地圖真實比例(Equal Earth)</option>
-        <option value="metro-map">八向化 (Metro Map)</option>
-        <option value="cluster-rtt">RTT 群聚炸開</option>
-        <option value="mds">RTT 自適應 (MDS)</option>
-        <option value="latency-map">RTT 真比例圖</option>
-        <option value="cose-rtt">CoSE × RTT(延遲)</option>
-        <option value="dagre-rtt">Dagre × area/RTT</option>
+      <optgroup label="地理">
+        <option value="geo-map" selected>地理座標配置</option>
+        <option value="metro-map">地鐵圖（8方向化）</option>
       </optgroup>
-      <optgroup label="拓樸 / 階層">
-        <option value="dagre">Dagre 階層</option>
-        <option value="cose">CoSE 力導向</option>
-        <option value="breadthfirst-adaptive">Breadthfirst × root</option>
-        <option value="breadthfirst">Breadthfirst</option>
-        <option value="concentric-adaptive">Concentric × demand</option>
-        <option value="concentric">Concentric</option>
+      <optgroup label="RTT 延遲">
+        <option value="cluster-rtt">RTT 延遲群聚</option>
+        <option value="mds">RTT 多維縮放</option>
+        <option value="latency-map">RTT 等比例圖</option>
+        <option value="cose-rtt">彈力 × RTT 延遲</option>
+        <option value="dagre-rtt">階層 × 區域/RTT</option>
       </optgroup>
-      <optgroup label="幾何">
-        <option value="circle-country">Circle × country</option>
-        <option value="circle">Circle</option>
-        <option value="grid-country">Grid × country</option>
-        <option value="grid">Grid</option>
+      <optgroup label="通用">
+        <option value="dagre">階層佈局</option>
+        <option value="cose">彈力佈局</option>
+        <option value="breadthfirst-adaptive">廣度優先 × 根節點</option>
+        <option value="breadthfirst">廣度優先</option>
+        <option value="concentric-adaptive">同心圓 × 需求量</option>
+        <option value="concentric">同心圓</option>
+        <option value="circle-country">環形 × 國家</option>
+        <option value="circle">環形</option>
+        <option value="grid-country">格狀 × 國家</option>
+        <option value="grid">格狀</option>
       </optgroup>
     </select>
     <button class="btn" data-g="view" id="btnLayout" title="依選單指定的演算法重新排列所有節點位置">⟲ 佈局</button>
@@ -421,20 +421,20 @@ const history = (()=>{
   const snap = ()=>({
     snNodes: [...nodes.entries()].map(([id,d])=>({ group:'nodes', data:{...d}, position:{...positions.get(id)||{x:0,y:0}}, classes:d.type||'' })),
     snEdges: [...edges.entries()].map(([id,d])=>({ group:'edges', data:{...d} })),
-    ext: JSON.parse(JSON.stringify(externals)),
-    d: { unit:D.unit, source:D.source, timestamp:D.timestamp, active:D.active, profiles: JSON.parse(JSON.stringify(D.profiles||{})) },
-    s: JSON.parse(JSON.stringify(S)),
-    r: JSON.parse(JSON.stringify(R)),
+    ext: structuredClone(externals),
+    d: { unit:D.unit, source:D.source, timestamp:D.timestamp, active:D.active, profiles: structuredClone(D.profiles||{}) },
+    s: structuredClone(S),
+    r: structuredClone(R),
   });
   const restore = (snp)=>{
     cy.elements().remove();  // cy remove 事件自動清 nodes/edges/positions Map
     _inspMountedId=null;     // Inspector 強制重建
     if (snp.snNodes||snp.snEdges) cy.add([ ...(snp.snNodes||[]), ...(snp.snEdges||[]) ]);
     else if (snp.elements) cy.add([ ...(snp.elements.nodes||[]), ...(snp.elements.edges||[]) ]); // 相容舊格式
-    externals = JSON.parse(JSON.stringify(snp.ext||[]));
-    if (snp.d){ D.unit=snp.d.unit; D.source=snp.d.source; D.timestamp=snp.d.timestamp; D.active=snp.d.active; D.profiles=JSON.parse(JSON.stringify(snp.d.profiles||{})); }
-    if (snp.s) S = JSON.parse(JSON.stringify(snp.s));
-    if (snp.r) R = JSON.parse(JSON.stringify(snp.r));
+    externals = structuredClone(snp.ext||[]);
+    if (snp.d){ D.unit=snp.d.unit; D.source=snp.d.source; D.timestamp=snp.d.timestamp; D.active=snp.d.active; D.profiles=structuredClone(snp.d.profiles||{}); }
+    if (snp.s) S = structuredClone(snp.s);
+    if (snp.r) R = structuredClone(snp.r);
     select(null); refresh();
     if (TAB==='demand'){ dmSel=null; renderDemand(); }
     else if (TAB==='srlg') renderSrlg();
@@ -582,12 +582,12 @@ function field(label, value, attr, type, extra){
   return `<div class="field"><label>${label}</label><input ${type?`type="${type}"`:''} ${extra||''} data-k="${attr}" value="${esc(value??'')}"></div>`;
 }
 // 欄位級更新：只改值，不動 DOM 結構（保留 focus）
+let _fieldCache=null;  // mount 後快取 {key→element}，patch 時免 querySelector
 function setField(key, value){
-  const inp=$('inspBody')?.querySelector(`[data-k="${key}"]`); if(!inp) return;
+  const inp=_fieldCache?.[key]; if(!inp) return;
   if(inp===document.activeElement) return;
   if(inp.type==='checkbox'){ inp.checked=!!value; }
-  else if(inp.tagName==='TEXTAREA'){ if(inp.value!==String(value??'')) inp.value=value??''; }
-  else { if(inp.value!==String(value??'')) inp.value=value??''; }
+  else { const s=String(value??''); if(inp.value!==s) inp.value=s; }
 }
 
 let _inspMountedId=null;  // 目前掛載的元素 id，null = empty 狀態
@@ -598,6 +598,7 @@ function renderInspector(){
   // ── 空選取 ──
   if(!sel){
     if(_inspMountedId!==null){
+      _fieldCache=null;
       kind.textContent='未選取'; title.textContent='Inspector';
       body.innerHTML=`<div class="empty"><div class="big">⤢</div>選一個節點或鏈路來編輯<br>
         右鍵畫布 = 新增 · 右鍵元件 = 選單<br><span style="font-size:11px">拖曳建邊請開「連線模式」(E)</span></div>`
@@ -663,14 +664,17 @@ function renderInspector(){
   bindInspector(); bindExternals();
 }
 function bindInspector(){
-  $('inspBody').querySelectorAll('[data-k]').forEach(inp=>{
-    const k=inp.dataset.k;
-    const ev=(k==='id'||inp.type==='checkbox'||inp.tagName==='SELECT')?'change':'input';
-    inp.addEventListener(ev, ()=>applyField(k, inp));
-  });
-  $('inspBody').querySelectorAll('[data-k="subnet"]').forEach(markCIDR);
-  bindStubsChip($('inspBody'));
-  bindCityCountry($('inspBody'));
+  const body=$('inspBody');
+  // 快取欄位供 setField 使用
+  _fieldCache={};
+  body.querySelectorAll('[data-k]').forEach(inp=>{ _fieldCache[inp.dataset.k]=inp; });
+  // 事件委派：兩個 listener 取代每個欄位各自掛
+  body.addEventListener('input',  e=>{ const k=e.target.dataset.k; if(k) applyField(k,e.target); });
+  body.addEventListener('change', e=>{ const k=e.target.dataset.k;
+    if(k && (k==='id'||e.target.type==='checkbox'||e.target.tagName==='SELECT')) applyField(k,e.target); });
+  body.querySelectorAll('[data-k="subnet"]').forEach(markCIDR);
+  bindStubsChip(body);
+  bindCityCountry(body);
   const del=$('delSel'); if(del) del.addEventListener('click', ()=>{ history.push(); removeRaw(selEle()); select(null); });
 }
 function applyField(k, inp){
@@ -1402,19 +1406,21 @@ function alignNodes(dir){
 }
 
 // ── Contextual Floating Toolbar ─────────────────────────────────────────────
-let _fbTimer=null;
+let _fbTimer=null, _cachedSel=null, _cachedBB=null;
+// 選取改變時清快取
+cy.on('select unselect','node,edge',()=>{ _cachedSel=null; _cachedBB=null; });
 function updateFloatBar(){
-  clearTimeout(_fbTimer);
+  cancelAnimationFrame(_fbTimer);
   _fbTimer=requestAnimationFrame(()=>{
-    const sel=cy.nodes(':selected');
     const bar=$('floatBar');
+    const sel=_cachedSel??(_cachedSel=cy.nodes(':selected'));
     if(sel.length<2||TAB!=='topo'){ bar.style.display='none'; return; }
-    const bb=sel.boundingBox(), pan=cy.pan(), zoom=cy.zoom();
+    const bb=_cachedBB??(_cachedBB=sel.boundingBox());
+    const pan=cy.pan(), zoom=cy.zoom();
     const rect=cy.container().getBoundingClientRect();
     const vpX=rect.left+(bb.x1+bb.w/2)*zoom+pan.x;
     const vpY=rect.top+bb.y1*zoom+pan.y;
     bar.style.display='flex';
-    // 先顯示才能取 offsetWidth
     bar.style.left=(vpX-bar.offsetWidth/2)+'px';
     bar.style.top=(vpY-bar.offsetHeight-16)+'px';
   });
@@ -1430,11 +1436,11 @@ $('floatBar').addEventListener('click',e=>{
 // ── City / Country 聯動欄位 ─────────────────────────────────────────────────
 // City 在左:datalist 建議(GEO_CITY 的所有城市碼);選完後查 CITY_COUNTRY 自動帶入 Country。
 // Country 在右:仍可手動覆蓋(新城市 / 特殊情況)。
+const _CITY_OPTS=Object.keys(GEO_CITY).sort().map(c=>{
+  const nm=CITY_NAME[c]; return nm?`<option value="${esc(c)}">${esc(c)} — ${esc(nm)}</option>`:`<option value="${esc(c)}">`;
+}).join('');  // GEO_CITY 是靜態常數，排序結果永遠相同，只算一次
 function cityCityRow(city, country){
-  const cityOpts=Object.keys(GEO_CITY).sort().map(c=>{
-    const nm=CITY_NAME[c]; return nm?`<option value="${esc(c)}">${esc(c)} — ${esc(nm)}</option>`:`<option value="${esc(c)}">`;
-  }).join('');
-  return `<datalist id="dl_city_codes">${cityOpts}</datalist>
+  return `<datalist id="dl_city_codes">${_CITY_OPTS}</datalist>
     <div class="row2">
       <div class="field"><label>City</label>
         <input data-k="city" list="dl_city_codes" value="${esc(city||'')}" placeholder="如 TPE">
@@ -1514,8 +1520,8 @@ function validate(){
   if(badSrlg.length) di.push('SRLG 參照不存在 ×'+badSrlg.length+'('+badSrlg.slice(0,3).join(' ')+(badSrlg.length>3?'…':'')+')');
   if(iso.length){ setStatus('bad','不連通,孤立:'+iso.join(',')+(di.length?'  ·  '+di.join(' · '):'')); flash(iso,'#ef4444'); }
   else if(di.length){ setStatus('bad','資料檢查:'+di.join(' · ')); }
-  else if(deg1.length){ setStatus('warn','degree<2(無備援):'+deg1.join(',')); flash(deg1,'#f59e0b'); }
-  else setStatus('ok','✔ 連通、degree≥2、資料合法');
+  else if(deg1.length){ setStatus('warn','單點連線（斷線即孤立）：'+deg1.join(',')); flash(deg1,'#f59e0b'); }
+  else setStatus('ok','✔ 連通、每節點有 ≥2 條鏈路（具備援路徑）、資料合法');
 }
 function flash(ids,color){
   ids.forEach(id=>{ const n=cy.getElementById(id);
@@ -1847,7 +1853,7 @@ function renderDemand(){
 $('dmAddProfile').onclick=()=>{ history.push();
   let n=1; while(D.profiles['profile'+n]) n++;
   const base=D.profiles[dmSel];
-  D.profiles['profile'+n]= base ? JSON.parse(JSON.stringify(base)) : { label:'profile'+n, symmetric:true, default:1, matrix:{} };
+  D.profiles['profile'+n]= base ? structuredClone(base) : { label:'profile'+n, symmetric:true, default:1, matrix:{} };
   D.profiles['profile'+n].label='profile'+n;
   dmSel='profile'+n; renderDemand();
 };
