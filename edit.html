@@ -8,6 +8,7 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="theme.css">
 
+<script src="draft.js"></script>
 <!-- Cytoscape core(對齊 index.html)+ cxtmenu(右鍵)。建邊/undo 改自寫,不依賴易碎外掛。 -->
 <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
 <script src="https://unpkg.com/cytoscape-cxtmenu@3.5.0/cytoscape-cxtmenu.js"></script>
@@ -1543,7 +1544,6 @@ function refresh(){
 }
 
 // ── localStorage + BroadcastChannel ────────────────────────────────────────
-const DRAFT_KEY='blastradius-draft';
 const _bc=typeof BroadcastChannel!=='undefined'?new BroadcastChannel('blastradius'):null;
 
 function serializeAll(){
@@ -1555,10 +1555,14 @@ function serializeAll(){
     demand:structuredClone(D),
     srlg:structuredClone(S),
     rtt:structuredClone(R),
-    _savedAt:Date.now(),
   };
 }
 
+// D / S / R 需在 hydrateAll 之前宣告（localStorage IIFE 啟動時即呼叫 hydrateAll）
+let D = { unit:'Gbps', source:'synthetic', timestamp:'', active:'', profiles:{} };
+let S = [];
+let R = { unit:'ms', note:'', fiberRttPerKm:0.01014, timestamp:'', matrix:{}, edges:[] };
+let _hydrating=false, _loadedFromDraft=false;
 function hydrateAll(data){
   cy.elements().remove(); _inspMountedId=null;
   const pos=data.positions||{}, eles=[];
@@ -1574,31 +1578,22 @@ function hydrateAll(data){
   else cy.fit(40);
   _hydrating=true; select(null); refresh(); _hydrating=false;
 }
-let _hydrating=false;
-
 let _dirtyTimer=null;
 function markDirty(){
-  if(_hydrating) return;  // hydrateAll 載入中，不回存
+  if(_hydrating) return;
   clearTimeout(_dirtyTimer);
   _dirtyTimer=setTimeout(()=>{
     const data=serializeAll();
-    try{ localStorage.setItem(DRAFT_KEY,JSON.stringify(data)); }catch(e){}
-    // 廣播拓樸部分給 index.html
+    Draft.write(data);  // 有效期、key 由 Draft 統一管理
     _bc?.postMessage({type:'topo-update',topo:{nodes:data.nodes,edges:data.edges,positions:data.positions}});
   },1500);
 }
 
-// 啟動時恢復草稿：有草稿就跳過後續 fetch（localStorage > *.js > remote）
-let _loadedFromDraft=false;
+// 啟動時恢復草稿：有草稿就跳過後續 fetch（本地 > remote > JS）
 (()=>{
-  const raw=localStorage.getItem(DRAFT_KEY);
-  if(!raw) return;
-  try{
-    const data=JSON.parse(raw);
-    const age=Date.now()-(data._savedAt||0);
-    if(age > 2*60*60*1000){ localStorage.removeItem(DRAFT_KEY); return; }  // 超過 2 小時丟棄
-    if((data.nodes||[]).length>0){ hydrateAll(data); toast('↩ 草稿已恢復'); _loadedFromDraft=true; }
-  }catch(e){}
+  const data=Draft.read();  // 有效期判斷由 Draft 統一處理
+  if(!data || !(data.nodes||[]).length) return;
+  hydrateAll(data); toast('↩ 草稿已恢復'); _loadedFromDraft=true;
 })();
 let stTimer=null;
 function setStatus(kind,msg){
@@ -1849,9 +1844,7 @@ $('btnExport').onclick=()=>{
 // ════════════════════════════════════════════════════════════════════════
 // 多檔資料模型(demand / srlg / rtt)+ 分頁編輯器 + 序列化器
 // ════════════════════════════════════════════════════════════════════════
-let D = { unit:'Gbps', source:'synthetic', timestamp:'', active:'', profiles:{} };
-let S = [];
-let R = { unit:'ms', note:'', fiberRttPerKm:0.01014, timestamp:'', matrix:{}, edges:[] };
+// D / S / R 已移至 hydrateAll 之前宣告（見上方）
 let TAB = 'topo', dmSel = null;
 const parseGlobal = (src,name)=>Function('"use strict";'+src+';return '+name+';')();
 const dl = (name,text)=>{ const b=new Blob([text],{type:'text/javascript'}); const a=document.createElement('a');

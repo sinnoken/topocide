@@ -8,54 +8,40 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="stylesheet" href="theme.css">
 <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+<script src="draft.js"></script>
 <script src="topology.js"></script>
 <script src="demand.js"></script>
 <script src="srlg.js"></script>
 <script src="rtt.js"></script>
 <script>
 // ── 載入優先序：廣播 > 本地 > remote > JS ─────────────────────────────────
-// ① 廣播（BroadcastChannel）— runtime 收到時即時更新，不影響初始載入
+// 廣播（BroadcastChannel）：runtime 收到時寫入本地並刷新，使其成為下次（或立即）最高優先
 (()=>{
   if(typeof BroadcastChannel==='undefined') return;
   const bc=new BroadcastChannel('blastradius');
   bc.onmessage=e=>{
     if(e.data?.type!=='topo-update') return;
-    // 更新 localStorage，reload 後生效
-    const cur=JSON.parse(localStorage.getItem('blastradius-draft')||'{}');
-    Object.assign(cur, e.data.topo);
-    localStorage.setItem('blastradius-draft', JSON.stringify(cur));
-    // 顯示 banner 提示重載
-    if(document.getElementById('_bcBanner')) return;
-    const b=document.createElement('div');
-    b.id='_bcBanner';
-    b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--accent);color:#fff;text-align:center;padding:8px 16px;font-size:13px;cursor:pointer';
-    b.setAttribute('data-i18n','ui.bcBanner');
-    b.textContent=I18N[LANG]?.['ui.bcBanner']||I18N['zh']?.['ui.bcBanner']||'⟳ Topology updated';
-    b.onclick=()=>location.reload();
-    document.body.prepend(b);
+    // 寫入本地（Draft.write 自動重置 _savedAt）
+    const cur=Draft.read()||{};
+    Draft.write({...cur, ...e.data.topo});
+    // 立即 reload，讓本地取得最高優先（廣播 → 本地 → 頁面生效）
+    location.reload();
   };
 })();
 
-// ② 本地 localStorage（優先於 topology.js）
+// 本地 localStorage（優先於 topology.js）
 (()=>{
-  const raw=localStorage.getItem('blastradius-draft');
-  if(!raw) return;
-  try{
-    const d=JSON.parse(raw);
-    const age=Date.now()-(d._savedAt||0);
-    if(age > 2*60*60*1000){ localStorage.removeItem('blastradius-draft'); return; }  // 超過 2 小時丟棄
-    if((d.nodes||[]).length>0){
-      topology.nodes=d.nodes; topology.edges=d.edges; topology.positions=d.positions||{};
-    }
-  }catch(e){}
+  const d=Draft.read();
+  if(!d || !(d.nodes||[]).length) return;
+  topology.nodes=d.nodes; topology.edges=d.edges; topology.positions=d.positions||{};
 })();
 
-// ③ remote（CF Workers / DB）— 未實作，留 stub
-// async function loadRemoteTopo(){ const d=await fetch(REMOTE_URL).then(r=>r.json());
-//   topology.nodes=d.nodes; topology.edges=d.edges; topology.positions=d.positions||{}; }
-// loadRemoteTopo().catch(()=>{});  // 失敗靜默，已有 localStorage / JS 兜底
+// remote（CF Workers / DB）— 未實作，留 stub
+// (async()=>{ const d=await fetch(REMOTE_URL).then(r=>r.json()).catch(()=>null);
+//   if(d?.nodes?.length){ topology.nodes=d.nodes; topology.edges=d.edges; topology.positions=d.positions||{}; }
+// })();
 
-// ④ topology.js（已由 <script src="topology.js"> 載入，上面三層覆蓋其 properties）
+// topology.js 已由 <script src="topology.js"> 載入，以上各層直接 mutate 其 properties
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
 <style type="text/tailwindcss">
