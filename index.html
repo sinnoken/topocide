@@ -456,6 +456,34 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
         </div>
         <div class="mt-1.5 text-xs text-gray-600"><span id="c2-cost-stats"></span></div>
       </div>
+      <!-- 路徑備援模式：色票圖例 + 說明 -->
+      <div id="c2-diversity-panel" class="hint mt-1.5" style="display:none">
+        <div class="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-0.5 items-center text-xs">
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t1"></span>
+          <span data-i18n="c2.diversity.t1">≥ 3 條獨立路徑</span>
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t2"></span>
+          <span data-i18n="c2.diversity.t2">2 條獨立路徑</span>
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t3"></span>
+          <span data-i18n="c2.diversity.t3">1 條（無備援）</span>
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t4"></span>
+          <span data-i18n="c2.diversity.t4">無法到達</span>
+        </div>
+        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.diversity.note">數字 = edge-disjoint paths 數。= 1 時任一鏈路斷即斷線（單點失效）。</div>
+      </div>
+      <!-- 頻寬存活模式：色票圖例 + 說明 -->
+      <div id="c2-bwsurvival-panel" class="hint mt-1.5" style="display:none">
+        <div class="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-0.5 items-center text-xs">
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t1"></span>
+          <span data-i18n="c2.bwsurvival.t1">≥ 100（備援頻寬充足）</span>
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t2"></span>
+          <span data-i18n="c2.bwsurvival.t2">50–99（部分保護）</span>
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t3"></span>
+          <span data-i18n="c2.bwsurvival.t3">1–49（嚴重縮水）</span>
+          <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t4"></span>
+          <span data-i18n="c2.bwsurvival.t4">0（N-1 後斷線）</span>
+        </div>
+        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.bwsurvival.note">數字 = N-1 worst-case 存活頻寬 ÷ 主路頻寬 × 100。hover 格子查看詳情。</div>
+      </div>
       <!-- RTT/SLO 模式:色票圖例 + SLO 目標輸入 + 覆蓋率統計(預設顯示)-->
       <div id="c2-rtt-panel" class="hint mt-1.5">
         <div class="grid grid-cols-[auto_1fr_auto_1fr] gap-x-2 gap-y-0.5 items-center text-xs">
@@ -817,6 +845,16 @@ const I18N = {
     'c2.rtt.t3':        '超標',
     'c2.rtt.t4':        '不可達',
     'c2.rttNote':       'RTT = geo 模型沿路徑加總(地理下限,非實測)',
+    'c2.diversity.t1':   '≥ 3 條獨立路徑',
+    'c2.diversity.t2':   '2 條獨立路徑',
+    'c2.diversity.t3':   '1 條（無備援）',
+    'c2.diversity.t4':   '無法到達',
+    'c2.diversity.note': '數字 = edge-disjoint paths 數。= 1 時任一鏈路斷即斷線（單點失效）。',
+    'c2.bwsurvival.t1':  '≥ 100（備援頻寬充足）',
+    'c2.bwsurvival.t2':  '50–99（部分保護）',
+    'c2.bwsurvival.t3':  '1–49（嚴重縮水）',
+    'c2.bwsurvival.t4':  '0（N-1 後斷線）',
+    'c2.bwsurvival.note':'數字 = N-1 worst-case 存活頻寬 ÷ 主路頻寬 × 100。hover 格子查看詳情。',
     'c2.costStats':     (p) => `最大成本 ${p.max} · 不可達 ${p.unreach} 對`,
     'c2.noRtt':         '未載入 rtt.js — 無法顯示 RTT / SLO。',
     'c2.coverage':      (p) => `SLO ≤${p.t}ms 覆蓋:${p.met}/${p.total}(${p.pct}%)· 破標 ${p.bad}`,
@@ -1112,6 +1150,16 @@ const I18N = {
     'c2.rtt.t3':        'Over',
     'c2.rtt.t4':        'Unreachable',
     'c2.rttNote':       'RTT = geo model summed along the path (geographic floor, not measured)',
+    'c2.diversity.t1':   '≥ 3 independent paths',
+    'c2.diversity.t2':   '2 independent paths',
+    'c2.diversity.t3':   '1 path (no backup)',
+    'c2.diversity.t4':   'Unreachable',
+    'c2.diversity.note': 'Number = edge-disjoint path count. = 1 means any single link failure disconnects this pair.',
+    'c2.bwsurvival.t1':  '≥ 100 (backup bandwidth sufficient)',
+    'c2.bwsurvival.t2':  '50–99 (partial protection)',
+    'c2.bwsurvival.t3':  '1–49 (severely degraded)',
+    'c2.bwsurvival.t4':  '0 (disconnected after N-1)',
+    'c2.bwsurvival.note':'Number = N-1 worst-case surviving bandwidth ÷ primary bandwidth × 100. Hover for details.',
     'c2.costStats':     (p) => `Max cost ${p.max} · Unreachable ${p.unreach} pairs`,
     'c2.noRtt':         'rtt.js not loaded — RTT / SLO unavailable.',
     'c2.coverage':      (p) => `SLO ≤${p.t}ms coverage: ${p.met}/${p.total} (${p.pct}%) · over ${p.bad}`,
@@ -1947,7 +1995,7 @@ const C2_Matrix = (() => {
             // 色階：0%=紅 1-49%=橙 50-99%=黃 100%+=綠
             const bwTier = r === 0 ? 4 : r < 50 ? 3 : r < 100 ? 2 : 1;
             const title = `主路 ${bw.primary}G → N-1 worst-case ${bw.worstCase}G（${r}%）`;
-            html += `<td class="clickable cost-t${bwTier} matrix-cell" data-src="${a}" data-dst="${b}" title="${title}">${r}%</td>`;
+            html += `<td class="clickable cost-t${bwTier} matrix-cell" data-src="${a}" data-dst="${b}" title="${title}">${r}</td>`;
           }
         } else if (isRtt) {
           reach++;
@@ -3358,8 +3406,10 @@ const ACTIONS = {
   c2Mode: (el) => {
     const m = el.dataset.mode;
     document.querySelectorAll('[data-action="c2Mode"]').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
-    dom('c2-cost-panel').style.display = m === 'cost' ? '' : 'none';
-    dom('c2-rtt-panel').style.display  = m === 'rtt'  ? '' : 'none';
+    dom('c2-cost-panel').style.display       = m === 'cost'        ? '' : 'none';
+    dom('c2-rtt-panel').style.display        = m === 'rtt'         ? '' : 'none';
+    dom('c2-diversity-panel').style.display  = m === 'diversity'   ? '' : 'none';
+    dom('c2-bwsurvival-panel').style.display = m === 'bw-survival' ? '' : 'none';
     C2_Matrix.setMode(m);
   },
   // C1 Path
