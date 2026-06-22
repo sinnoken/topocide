@@ -230,13 +230,55 @@ default-route (`0.0.0.0/0`) fallback". Full LPM is on the Roadmap.
 
 ### §4.5 Matrix RTT / SLO mode (C2 presentation)
 
-C2 offers two view modes (**default RTT**). **Cost** shows the §4 shortest-path
+C2 offers several view modes (**default RTT**); **Diversity** (edge-disjoint path count) and **Bandwidth-survival** (§4.6) join the two below. **Cost** shows the §4 shortest-path
 cost. **RTT / SLO** sums each edge's RTT along the shortest path (per-edge RTT
 from `rtt.edges`, else the `rtt.matrix[cityA][cityB]` city-pair lookup; ECMP →
 min over paths) and shades each cell against an SLO target (default ≤150 ms),
 reporting coverage (% of reachable pairs within target). This is a presentation
 layer in `index.html` — the path itself is still §4's cost-based SPT. Needs
 `rtt.js`; without it the mode falls back to cost.
+
+### §4.6 Matrix bandwidth-survival mode (C2 presentation)
+
+`n1BandwidthSurvivability(edges, routerIds)` answers, per node pair: *after the
+single worst single-link failure along the OSPF path, what percentage of the
+primary path's bandwidth still survives?* Cell colour tiers: **0** red
+(disconnected after N-1), **1–49** orange (severely degraded), **50–99** yellow
+(partial protection), **≥100** green (fully backed — or better). The rate **can
+exceed 100 %** (see below).
+
+It is **OSPF cost-based**: bandwidth is measured along the paths traffic
+actually takes (§4 cost-based SPT / ECMP), not along an idealised
+capacity-maximising path. Built on `buildAdjacency` + `dijkstraSource` (§3.1,
+§4.1); only `p2p` edges with `capacity > 0` contribute bandwidth (transit /
+pseudo-node edges affect routing but carry no capacity).
+
+**Model:**
+
+1. **Primary** — the OSPF shortest-path **DAG** for the pair (all equal-cost
+   ECMP paths). `spDagEdges` walks `preds` to collect every edge on that DAG
+   (the ECMP edge union, without enumerating paths). Denominator =
+   `minCapOf(primary edges)`, the narrowest `p2p` capacity on the DAG.
+2. **N-1** — fail **each edge on the primary DAG** in turn
+   (`buildAdjacency(edges, {eid})`), recompute the OSPF DAG, and take the
+   narrowest capacity over its edge union. Unreachable after failure → 0.
+   `worstCase = min` across all these scenarios.
+3. `rate = ceil(worstCase / denominator × 100)` — **not capped**, symmetric
+   (`i < j`, mirrored; the `src → dst` direction is authoritative when cost is
+   asymmetric).
+
+**Why it can exceed 100 %.** When the OSPF primary is a thin low-cost path and a
+single failure reroutes traffic onto a higher-cost but fatter detour, the
+surviving bandwidth is larger than the primary's — e.g. primary 30 G, post-
+failure 100 G → 334 %. A widest-path proxy could never show this (its backup is
+always ≤ primary); the OSPF view reflects the real "thin primary, fat backup"
+case.
+
+**Scope:** single-link failures over the primary-DAG edges only — no N-2
+combinations, and edges off the OSPF path are never failed (failing them cannot
+reduce the surviving bandwidth below the intact primary). ECMP paths are
+**unioned**, so the value is the narrowest edge anywhere in the surviving
+forwarding. Presentation layer in `index.html`; requires edge `capacity`.
 
 ---
 
@@ -516,7 +558,7 @@ authoritative mapping of UI tab → backing § / function:
 | UI tab | UI No. | Backing § / function | Auto-run on switch |
 |--------|--------|----------------------|--------------------|
 | Path | C1 | §4 `dijkstraECMP` + §5.4 `unbackupSegmentScan` | `renderPath(src, dst)` |
-| Matrix | C2 | §4 all-pair `dijkstraDist` (+ §4.5 RTT/SLO mode) | `renderMatrix()` |
+| Matrix | C2 | §4 all-pair `dijkstraDist` (+ §4.5 RTT/SLO, §4.6 bandwidth-survival modes) | `renderMatrix()` |
 | Centrality | C3 | §6.2 `allPairsLoad` (Edge BC) + §6.3 `computeNodeBC` (Node BC); node ranking can switch to §6.3b `computeNodeTraffic` (traffic-weighted, needs demand.js) | `listAllPairs.click()` |
 | Edge traffic | C4 | §6.2b `allPairsTraffic` (needs demand.js) | auto-computes actual load / utilization |
 
@@ -562,6 +604,7 @@ for every (a,b), wasting V−1 redundant runs).
 | §7 ECMP Check | O(V² · k · SPT) | user click, k = ECMP edge count (single-source reuse not yet applied) |
 | §8 Asymmetric | **V × single-source** + V² expansion | user click |
 | §10 N-1 | O((V + E) · V × single-source) | user click (cost only, no path expansion) |
+| §4.6 Bandwidth-survival (all pairs) | O(V² · L · (V+E) log V), L = primary-path edge count | C2 mode switch |
 | §15 Weight optimization | O(maxEvals × all-pairs) (budget cap) | user click |
 
 The built-in synthetic sample is a POC small scale (a handful of routers, dozens
@@ -583,6 +626,7 @@ Topolograph naming). Main differences:
 
 - Added §6.2b traffic-weighted edge load (`allPairsTraffic`) + the C4 edge-traffic tab
 - Added §10 N-1 Worst-case Ranking, wired up to SRLG group failure
+- Added §4.6 C2 bandwidth-survival matrix mode (`n1BandwidthSurvivability`; OSPF cost-based ECMP, N-1 worst-case surviving bandwidth, `ceil`-rounded, uncapped — can exceed 100 %)
 - §11 visual state machine pulled out into its own chapter (previously scattered across UI handlers)
 - §12 changed to an authoritative "UI tab (C1–C10) → backing §/function" mapping; algorithms are anchored solely by §, no longer by C numbers (the old `Cx` prefix in engine.js has been removed)
 - Added §6.3b traffic-weighted node centrality (`computeNodeTraffic`) + the C3 transit-count⇄traffic-weighted toggle

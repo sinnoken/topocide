@@ -213,11 +213,40 @@ for each neighbor (v, c) of u:
 
 ### §4.5 矩陣 RTT / SLO 模式(C2 呈現)
 
-C2 提供兩種檢視模式(**預設 RTT**)。**成本**顯示 §4 最短路徑成本。**RTT / SLO**
+C2 提供多種檢視模式(**預設 RTT**);**多樣性**(邊不相交路徑數)與**頻寬存活**(§4.6)與下列兩者並列。**成本**顯示 §4 最短路徑成本。**RTT / SLO**
 沿最短路徑加總各邊 RTT(每邊 RTT 取自 `rtt.edges`,否則查 `rtt.matrix[cityA][cityB]`
 城市對;ECMP → 取各路徑最小),依 SLO 目標(預設 ≤150 ms)為每格上色,並回報覆蓋率
 (達標 pair 佔可達 pair 的 %)。此為 `index.html` 的呈現層 —— 路徑本身仍是 §4 以成本為準的
 SPT。需 `rtt.js`;缺則退回成本模式。
+
+### §4.6 矩陣頻寬存活模式(C2 呈現)
+
+`n1BandwidthSurvivability(edges, routerIds)` 回答每個節點對:*沿 OSPF 路徑發生最糟
+的單一鏈路失效後,主路的頻寬還剩多少 %?* 格子色階:**0** 紅(N-1 後不可達)、
+**1–49** 橙(嚴重縮水)、**50–99** 黃(部分保護)、**≥100** 綠(完整備援、甚至更好)。
+存活率**可超過 100 %**(見下)。
+
+這是 **OSPF cost-based** 指標:沿**流量實際會走的**最短路(§4 cost-based SPT / ECMP)
+量頻寬,而非理想化的最寬路。以 `buildAdjacency` + `dijkstraSource`(§3.1、§4.1)為基;
+只有 `capacity > 0` 的 `p2p` 邊計入頻寬(transit / pseudo 邊影響選路、無容量)。
+
+**模型:**
+
+1. **主路** — 該對節點的 OSPF 最短路 **DAG**(所有等成本 ECMP)。`spDagEdges` 走 `preds`
+   收集 DAG 上每條邊(ECMP 邊聯集,免枚舉路徑)。分母 = `minCapOf(主路邊)`,DAG 上最窄的
+   `p2p` 容量。
+2. **N-1** — **沿主路 DAG 每條邊**逐一失效(`buildAdjacency(edges, {eid})`),重算 OSPF
+   DAG,取其邊聯集裡最窄的容量。失效後不可達 → 0。`worstCase = min`(各情境)。
+3. `rate = ceil(worstCase / 分母 × 100)` —— **不夾上限**,對稱(算 `i < j`,鏡射;成本
+   不對稱時以 `src → dst` 方向為準)。
+
+**為何可超過 100 %。** 當 OSPF 主路是條細的低成本路,而單一失效把流量繞到較高成本但更肥
+的備援時,存活頻寬會比主路還大 —— 例:主路 30 G、失效後 100 G → 334 %。最寬路 proxy 永遠
+看不到這個(它的備援一定 ≤ 主路);OSPF 視角如實反映「主路細、備援肥」的真實情況。
+
+**範圍:** 只做主路 DAG 邊的單一失效 —— 不做 N-2 組合,OSPF 路徑以外的邊永不失效(失效它們
+不會讓存活頻寬低於完整主路)。ECMP 多路採**聯集**,故值 = 失效後轉送結構裡任何一處最窄的邊。
+`index.html` 的呈現層;需邊帶 `capacity`。
 
 ---
 
@@ -470,7 +499,7 @@ op 優先:
 | UI 分頁 | UI 編號 | 背後 § / 函式 | 切換時自動執行 |
 |---------|---------|----------------|----------------|
 | 路徑 | C1 | §4 `dijkstraECMP` + §5.4 `unbackupSegmentScan` | `renderPath(src, dst)` |
-| 矩陣 | C2 | §4 全 pair `dijkstraDist`(+ §4.5 RTT/SLO 模式) | `renderMatrix()` |
+| 矩陣 | C2 | §4 全 pair `dijkstraDist`(+ §4.5 RTT/SLO、§4.6 頻寬存活 模式) | `renderMatrix()` |
 | 樞紐度 | C3 | §6.2 `allPairsLoad`(Edge BC)+ §6.3 `computeNodeBC`(Node BC);節點排行可切 §6.3b `computeNodeTraffic`(流量加權,需 demand.js) | `listAllPairs.click()` |
 | 邊流量 | C4 | §6.2b `allPairsTraffic`(需 demand.js) | 自動算實際負載 / 利用率 |
 
@@ -510,6 +539,7 @@ op 優先:
 | §7 ECMP Check | O(V² · k · SPT) | 使用者點按,k=ECMP 邊數(尚未套單源重用) |
 | §8 Asymmetric | **V × 單源** + V² 展開 | 使用者點按 |
 | §10 N-1 | O((V + E) · V × 單源) | 使用者點按(只取 cost,免展開路徑) |
+| §4.6 頻寬存活(全 pair) | O(V² · L · (V+E) log V),L = 主路邊數 | C2 模式切換 |
 | §15 權重優化 | O(maxEvals × all-pairs)(預算上限) | 使用者點按 |
 
 內建合成樣本屬 POC 小規模(數 router、數十 edge)。二元堆 + 單源重用後,§15 權重優化最壞情境
@@ -526,6 +556,7 @@ op 優先:
 
 - 新增 §6.2b 流量加權邊負載(`allPairsTraffic`)+ C4 邊流量分頁
 - 新增 §10 N-1 Worst-case Ranking,並接上 SRLG 群組失效
+- 新增 §4.6 C2 頻寬存活矩陣模式(`n1BandwidthSurvivability`;OSPF cost-based ECMP、N-1 最壞單邊存活頻寬、`ceil` 進位、不夾上限可 >100 %)
 - §11 視覺狀態機獨立成章(原先散落在 UI handler 各處)
 - §12 改為「UI 分頁(C1–C10)→ 背後 §/函式」權威對照;演算法一律以 § 錨定,不再用 C 編號(舊版 engine.js 的 `Cx` 前綴已移除)
 - 新增 §6.3b 流量加權節點樞紐度(`computeNodeTraffic`)+ C3 過路數⇄流量加權切換

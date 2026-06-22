@@ -1029,59 +1029,56 @@ export function pairwiseEdgeConnectivity(edgeList, routerIds) {
 // returns: Map<"src|dst", { primary: number, worstCase: number, rate: number }>
 
 export function n1BandwidthSurvivability(edges, routerIds) {
-  // 預建 adjacency list（取代 widestPath 內每節點掃全部邊）：node → [{to, cap, edgeId}]
-  const adj = new Map();
-  const ensure = id => { if (!adj.has(id)) adj.set(id, []); };
+  // OSPF cost-based:沿「真實會走的」最短路(ECMP)量頻寬,而非理想化最寬路。
+  // 容量查表:只 p2p 且 capacity>0 計入頻寬(transit/pseudo 無容量,只影響選路)。
+  const capOf = new Map();
   for (const e of edges) {
-    if (e.type !== 'p2p' || (e.capacity ?? 0) <= 0) continue;
-    ensure(e.source); ensure(e.target);
-    adj.get(e.source).push({ to: e.target, cap: e.capacity, edgeId: e.id });
-    adj.get(e.target).push({ to: e.source, cap: e.capacity, edgeId: e.id });
+    if (e.type === 'p2p' && (e.capacity ?? 0) > 0) capOf.set(e.id, e.capacity);
   }
+  const adj0 = buildAdjacency(edges);   // §4 cost-based 鄰接(無失效);N-1 時另建排除版
 
-  // Widest-path（max-min-capacity）Dijkstra，用 heap（O(E log V)）。
-  // 借用 min-heap：key = -capacity，讓「容量最大」先彈出。excludeEdgeId 供 N-1 排除。
-  function widestPath(src, dst, excludeEdgeId = null) {
-    const cap = new Map(), prev = new Map(), visited = new Set();
-    cap.set(src, Infinity);
-    let seq = 0;
-    const h = []; heapPush(h, [-Infinity, seq++, src]);  // [-cap, seq, node]
-    while (h.length) {
-      const [, , u] = heapPop(h);
-      if (visited.has(u)) continue;
-      visited.add(u);
-      if (u === dst) break;
-      const c = cap.get(u);
-      for (const { to, cap: ec, edgeId } of (adj.get(u) || [])) {
-        if (edgeId === excludeEdgeId || visited.has(to)) continue;
-        const w = c < ec ? c : ec;
-        if (w > (cap.get(to) ?? -1)) { cap.set(to, w); prev.set(to, { from: u, edgeId }); heapPush(h, [-w, seq++, to]); }
-      }
+  // src→dst 最短路 DAG 上所有邊 = 全 ECMP 最短路的邊聯集(走 preds,免枚舉路徑、避免指數爆炸)。
+  const spDagEdges = (preds, src, dst) => {
+    const out = new Set(), seen = new Set(), stack = [dst];
+    while (stack.length) {
+      const node = stack.pop();
+      if (node === src || seen.has(node)) continue;
+      seen.add(node);
+      for (const { u, id } of (preds[node] || [])) { out.add(id); stack.push(u); }
     }
-    const mc = cap.get(dst);
-    if (!mc || mc <= 0) return { minCap: 0, edgeIds: [] };
-    const edgeIds = [];
-    let cur = dst;
-    while (prev.has(cur)) { const { from, edgeId } = prev.get(cur); edgeIds.push(edgeId); cur = from; }
-    return { minCap: mc, edgeIds };
-  }
+    return out;
+  };
+  // 一組邊裡的最小容量(只算有容量的 p2p 邊);全無容量回 null。
+  const minCapOf = (edgeSet) => {
+    let m = Infinity;
+    for (const id of edgeSet) { const c = capOf.get(id); if (c != null && c < m) m = c; }
+    return m === Infinity ? null : m;
+  };
 
   const result = new Map();
   for (let i = 0; i < routerIds.length; i++) {
     for (let j = i + 1; j < routerIds.length; j++) {  // 對稱：只算 i<j，反向鏡射
       const src = routerIds[i], dst = routerIds[j];
-      const primary = widestPath(src, dst);
+      const { dist, preds } = dijkstraSource(adj0, src);
       let val;
-      if (primary.minCap === 0) {
+      if (dist[dst] === undefined) {                       // 主路不可達
         val = { primary: 0, worstCase: 0, rate: 0 };
       } else {
-        let worstCase = Infinity;
-        for (const eid of primary.edgeIds) {
-          const alt = widestPath(src, dst, eid);
-          if (alt.minCap < worstCase) worstCase = alt.minCap;
+        const primEdges = spDagEdges(preds, src, dst);     // 主路 ECMP 邊聯集
+        const primary = minCapOf(primEdges);
+        if (primary == null) {                             // 主路上無容量資料
+          val = { primary: 0, worstCase: 0, rate: 0 };
+        } else {
+          let worstCase = Infinity;
+          for (const eid of primEdges) {                   // 沿主路每邊逐一失效(含 transit)
+            const { dist: dF, preds: pF } = dijkstraSource(buildAdjacency(edges, new Set([eid])), src);
+            const m = (dF[dst] === undefined) ? 0 : minCapOf(spDagEdges(pF, src, dst));  // 失效後不可達 → 0
+            const sv = (m == null) ? 0 : m;
+            if (sv < worstCase) worstCase = sv;
+          }
+          if (worstCase === Infinity) worstCase = primary;  // 主路無可失效邊(理論上不會)
+          val = { primary, worstCase, rate: Math.ceil((worstCase / primary) * 100) };  // 不夾 100,可 >100
         }
-        if (worstCase === Infinity) worstCase = primary.minCap;
-        val = { primary: primary.minCap, worstCase, rate: Math.round((worstCase / primary.minCap) * 100) };
       }
       result.set(`${src}|${dst}`, val);
       result.set(`${dst}|${src}`, val);  // 無向圖對稱

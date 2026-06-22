@@ -1470,6 +1470,7 @@ const cy = cytoscape({
       'label':'data(label)',
       'source-label':'data(srcLabel)','target-label':'data(dstLabel)',
       'source-text-offset':24,'target-text-offset':24,
+      // text-wrap+justification:讓對稱邊的「cost ⏎ 容量G」兩行置中渲染(非對稱邊容量為單行)
       'text-wrap':'wrap','text-justification':'center',
       'font-size':'11px','color':'#475569',
       'text-background-color':'#fff','text-background-opacity':0.85,
@@ -2000,8 +2001,8 @@ const C2_Matrix = (() => {
           if (!bw || bw.primary === 0) {
             html += `<td class="clickable cost-t4 matrix-cell" data-src="${a}" data-dst="${b}" title="無容量資料或無法到達">—</td>`;
           } else {
-            const r = bw.rate;
-            // 色階：0%=紅 1-49%=橙 50-99%=黃 100%+=綠
+            const r = bw.rate;   // engine 算好的存活率整數(OSPF-based,無條件進位);可 >100(失效後繞到比主路更肥的備援)
+            // 色階(吃進位後整數):0=紅(失效後不可達) 1-49=橙 50-99=黃 ≥100=綠
             const bwTier = r === 0 ? 4 : r < 50 ? 3 : r < 100 ? 2 : 1;
             const title = `主路 ${bw.primary}G → N-1 worst-case ${bw.worstCase}G（${r}%）`;
             html += `<td class="clickable cost-t${bwTier} matrix-cell" data-src="${a}" data-dst="${b}" title="${title}">${r}</td>`;

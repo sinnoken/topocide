@@ -36,7 +36,7 @@ Backbone network engineers repeatedly face three hard problems:
 | Tab | Purpose |
 |-----|---------|
 | **C1 Path** | Source→destination shortest path (SPT + ECMP), auto-classifies PRIMARY / BACKUP, unbackup-segment scan |
-| **C2 Matrix** | All-pairs cost matrix or RTT/SLO mode (actual path RTT vs SLO target, coverage %) |
+| **C2 Matrix** | All-pairs cost matrix, RTT/SLO mode (actual path RTT vs SLO target, coverage %), or bandwidth-survival mode (N-1 worst-case surviving bandwidth as % of the primary path) |
 | **C3 Centrality** | Link/node betweenness-centrality inventory, marks pure-redundancy circuits (normally zero traffic) |
 | **C4 Edge traffic** | Per-link actual load and utilisation from the traffic matrix; flags overload |
 | **C5 Failure sim** | Fail a single element or an entire SRLG group; shows connectivity, traffic redistribution, capacity overflow |
