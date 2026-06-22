@@ -1030,10 +1030,10 @@ export function pairwiseEdgeConnectivity(edgeList, routerIds) {
 
 export function n1BandwidthSurvivability(edges, routerIds) {
   // OSPF cost-based:沿「真實會走的」最短路(ECMP)量頻寬,而非理想化最寬路。
-  // 容量查表:只 p2p 且 capacity>0 計入頻寬(transit/pseudo 無容量,只影響選路)。
+  // 容量查表:任何 capacity>0 的邊都計入頻寬(p2p 鏈路與 transit/LAN 段皆帶容量)。
   const capOf = new Map();
   for (const e of edges) {
-    if (e.type === 'p2p' && (e.capacity ?? 0) > 0) capOf.set(e.id, e.capacity);
+    if ((e.capacity ?? 0) > 0) capOf.set(e.id, e.capacity);
   }
   const adj0 = buildAdjacency(edges);   // §4 cost-based 鄰接(無失效);N-1 時另建排除版
 
