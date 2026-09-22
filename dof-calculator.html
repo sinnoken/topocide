@@ -62,8 +62,8 @@ p{margin:0}
 .verdict[data-ok=false] .verdict__flag{color:var(--no)}
 .verdict__icon{font-size:1.3rem}
 .verdict__msg{margin-top:7px;font-size:.93rem;opacity:.85}
-.answer{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
-@media (max-width:460px){.answer{grid-template-columns:1fr}}
+.answer{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+@media (max-width:700px){.answer{grid-template-columns:1fr}}
 .answer__cell{background:var(--card);border-radius:var(--r2);padding:14px 16px;border:1px solid var(--line)}
 .answer__cell--wide{grid-column:1/-1}
 .answer__cell--wide .answer__v{font-size:1.25rem}
@@ -74,19 +74,31 @@ p{margin:0}
 .exp-warn{color:var(--warn);font-weight:650}
 
 .ruler{position:relative;height:116px;border-radius:var(--r2);background:var(--sunken);
-  border:1px solid var(--line);overflow:hidden;margin-top:4px}
+  border:1px solid var(--line);overflow:hidden;margin-top:4px;touch-action:none;user-select:none}
 .ruler__dof{position:absolute;top:0;bottom:22px;background:#22c55e2e;
   border-inline:2px solid var(--ok-line);transition:left .2s,width .2s}
 .ruler__target{position:absolute;top:22px;bottom:44px;border:2px dashed var(--brand);
-  border-radius:7px;transition:left .2s,width .2s}
+  border-radius:7px;transition:left .2s,width .2s;cursor:grab;z-index:3}
 .ruler__tlabel{position:absolute;top:2px;font-size:.72rem;font-weight:700;color:var(--brand);
   transform:translateX(-50%);white-space:nowrap;transition:left .2s}
-.ruler__focus{position:absolute;top:0;bottom:22px;width:2px;background:var(--fg);transition:left .2s}
+.ruler__focus{position:absolute;top:0;bottom:22px;width:2px;background:var(--fg);transition:left .2s;
+  cursor:ew-resize;z-index:5;touch-action:none}
+.ruler__focus::before{content:"";position:absolute;top:0;bottom:0;left:-10px;width:22px}
 .ruler__focus::after{content:"▼";position:absolute;top:-3px;left:50%;transform:translateX(-50%);
   font-size:.62rem;color:var(--fg)}
-.ruler__ticks{position:absolute;inset-inline:0;bottom:0;height:22px;display:flex;
-  justify-content:space-between;align-items:center;padding-inline:6px;
+.ruler__handle{position:absolute;top:22px;bottom:44px;width:18px;transform:translateX(-50%);
+  cursor:ew-resize;z-index:6;touch-action:none}
+.ruler__handle::before{content:"";position:absolute;left:7px;top:6px;bottom:6px;width:4px;
+  border-radius:3px;background:var(--brand);box-shadow:0 0 0 2px var(--card)}
+.ruler__handle[hidden]{display:none}
+.ruler[data-dragging=true] :is(.ruler__dof,.ruler__target,.ruler__tlabel,.ruler__focus){transition:none}
+.ruler[data-drag-mode=range] .ruler__target{cursor:grabbing}
+@media (hover:hover){.ruler__target:hover{background:var(--brand-soft)}}
+.ruler__ticks{position:absolute;inset-inline:0;bottom:0;height:22px;
   border-top:1px solid var(--line);font-family:var(--mono);font-size:.68rem;color:var(--faint)}
+.ruler__ticks span{position:absolute;top:50%;transform:translate(-50%,-50%);white-space:nowrap}
+.ruler__ticks span:first-child{transform:translate(0,-50%)}
+.ruler__ticks span:last-child{transform:translate(-100%,-50%)}
 .key{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:.8rem;color:var(--muted)}
 .key i{display:inline-block;width:15px;height:11px;border-radius:3px;margin-inline-end:5px;vertical-align:-1px}
 
@@ -101,6 +113,8 @@ input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
 input[aria-invalid=true]{border-color:var(--no)}
 .pair{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:7px}
 .pair span{color:var(--faint);font-size:.85rem}
+.infinity-toggle{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:.82rem;color:var(--muted);cursor:pointer}
+.infinity-toggle input{width:1rem;height:1rem;accent-color:var(--brand)}
 
 .slide{display:flex;flex-direction:column;gap:7px}
 .slide__top{display:flex;justify-content:space-between;align-items:baseline}
@@ -169,6 +183,11 @@ tbody tr[data-now=true]{background:var(--brand-soft)}
       <span class="answer__note" id="aFocusNote"></span>
     </div>
     <div class="answer__cell">
+      <span class="answer__k" data-i18n="answer.hyperLabel"></span>
+      <span class="answer__v" id="aHyper">—</span>
+      <span class="answer__note" id="aHyperNote"></span>
+    </div>
+    <div class="answer__cell">
       <span class="answer__k" data-i18n="answer.stop"></span>
       <span class="answer__v" id="aStop">—</span>
       <span class="answer__note" id="aStopNote"></span>
@@ -197,6 +216,10 @@ tbody tr[data-now=true]{background:var(--brand-soft)}
         <span data-i18n="field.rangeTo"></span>
         <input id="far"  type="number" min="0.2" step="0.5" data-i18n-aria="a11y.far">
       </div>
+      <label class="infinity-toggle" for="farInfinity">
+        <input id="farInfinity" type="checkbox">
+        <span data-i18n="field.infinity"></span>
+      </label>
       <p class="f__hint" id="rangeHint"></p>
     </div>
     <div class="f">
@@ -250,9 +273,11 @@ tbody tr[data-now=true]{background:var(--brand-soft)}
 
   <div class="ruler" role="img" id="ruler" data-i18n-aria="a11y.ruler">
     <div class="ruler__dof" id="rDof"></div>
-    <div class="ruler__target" id="rTarget"></div>
+    <div class="ruler__target" id="rTarget" data-drag="range"></div>
+    <div class="ruler__handle" id="rNearHandle" data-drag="near" role="slider" tabindex="0"></div>
+    <div class="ruler__handle" id="rFarHandle" data-drag="far" role="slider" tabindex="0"></div>
     <div class="ruler__tlabel" id="rLabel"></div>
-    <div class="ruler__focus" id="rFocus"></div>
+    <div class="ruler__focus" id="rFocus" data-drag="focus" role="slider" tabindex="0"></div>
     <div class="ruler__ticks" id="rTicks"></div>
   </div>
   <div class="key">
@@ -352,7 +377,7 @@ const MESSAGES={
  "meta.desc":"輸入要拍的距離範圍，馬上知道該用什麼光圈、對焦在哪裡。",
  "app.title":"該對焦在哪？該用什麼光圈？",
  "app.tagline":"告訴我你要拍多遠到多遠，其他交給我算。",
- "answer.focus":"對焦距離","answer.stop":"最小可用光圈","answer.exposure":"曝光組合",
+ "answer.focus":"建議對焦距離","answer.hyperLabel":"超焦距","answer.stop":"景深所需光圈","answer.exposure":"建議曝光組合",
  "answer.hyper":"超焦距 {v}","answer.theory":"理論值 {v}","answer.theoryDiff":"理論值 {v}，已進入繞射",
  "answer.impossible":"辦不到","answer.impossibleNote":"即使縮到最小光圈也不夠",
  "answer.expNote":"與原設定等量曝光","answer.expClipped":"已達上下限，曝光相差 {v} 級",
@@ -366,7 +391,7 @@ const MESSAGES={
  "step1.title":"你要拍多遠到多遠？","step1.sub":"從最近的主體到最遠的主體，這段距離內都要清楚。",
  "step2.title":"你用什麼器材？","step2.sub":"相機片幅和鏡頭焦距會直接決定景深深淺。",
  "step3.title":"實際拍攝設定","step3.sub":"拉動看看綠色範圍有沒有蓋住虛線框，蓋住就成功。",
- "field.range":"距離範圍","field.rangeTo":"到","field.scenarios":"常見情境",
+ "field.range":"距離範圍","field.rangeTo":"到","field.infinity":"最遠距離設為無限遠","field.scenarios":"常見情境",
  "field.sensor":"相機片幅","field.focal":"鏡頭焦距","field.framing":"換片幅時","field.quality":"畫質要求",
  "field.iso":"ISO 感光度","field.compensate":"改光圈時",
  "field.aperture":"光圈","field.shutter":"快門","field.focusDist":"對焦距離",
@@ -395,7 +420,7 @@ const MESSAGES={
  "th.aperture":"光圈","th.nearest":"最近清楚","th.farthest":"最遠清楚","th.dof":"景深","th.enough":"夠不夠",
  "note.diffraction":"△ 代表已進入繞射範圍，光圈再縮小整體銳利度反而會下降。",
  "foot.privacy":"全部在你的瀏覽器計算，不會上傳任何資料。",
- "a11y.near":"最近距離","a11y.far":"最遠距離","a11y.width":"寬","a11y.height":"高","a11y.ruler":"景深覆蓋示意圖",
+ "a11y.near":"最近距離","a11y.far":"最遠距離","a11y.focusHandle":"拖曳調整對焦距離","a11y.nearHandle":"拖曳調整最近距離","a11y.farHandle":"拖曳調整最遠距離","a11y.width":"寬","a11y.height":"高","a11y.ruler":"景深覆蓋示意圖",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"無限遠","unit.optM":"公尺 (m)","unit.optFt":"英尺 (ft)",
  "sensor.mf":"中片幅 44×33","sensor.ff":"全片幅 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"M4/3 17.3×13",
@@ -408,9 +433,9 @@ const MESSAGES={
  "framing.focal":"沿用同一顆鏡頭（視角會變）","framing.fov":"保持相同視角（自動換算焦距）",
  "comp.iso":"自動調 ISO","comp.shutter":"自動調快門","comp.off":"不補償（手動）",
  "scenario.group":"合照","scenario.street":"街拍","scenario.event":"活動",
- "scenario.landscape":"風景","scenario.cctv":"監控",
+ "scenario.landscape":"風景","scenario.cctv":"監控","scenario.hyperLandscape":"超焦距風景","scenario.stars":"星空",
  "gloss.focus":"對焦距離","gloss.focus.body":"相機對焦在哪個距離。不是對在最近或最遠，而是對在能前後平均分配清晰範圍的位置。",
- "gloss.stop":"最小可用光圈","gloss.stop.body":"f 值最小到這裡，再開大景深就不夠。數字越大光圈越小、景深越深。",
+ "gloss.stop":"景深所需光圈","gloss.stop.body":"這是能涵蓋目標範圍的最大開口。再開大一級，景深就不夠；f 值越大，光圈越小、景深越深。",
  "gloss.coc":"容許模糊圈","gloss.coc.body":"一個點在感光元件上可以糊到多大，人眼還是覺得它清楚。這是主觀標準，不是物理界線。",
  "gloss.hyper":"超焦距","gloss.hyper.body":"對焦在這個距離時，從它的一半到無限遠都會清楚。拍風景常用。",
  "gloss.diff":"繞射","gloss.diff.body":"光圈縮太小會因為繞射讓整張照片變鈍。表格中的 △ 就是提醒你已經越線。",
@@ -421,7 +446,7 @@ const MESSAGES={
  "meta.desc":"输入要拍的距离范围，马上知道该用什么光圈、对焦在哪里。",
  "app.title":"该对焦在哪？该用什么光圈？",
  "app.tagline":"告诉我你要拍多远到多远，其他交给我算。",
- "answer.focus":"对焦距离","answer.stop":"最小可用光圈","answer.exposure":"曝光组合",
+ "answer.focus":"建议对焦距离","answer.hyperLabel":"超焦距","answer.stop":"景深所需光圈","answer.exposure":"建议曝光组合",
  "answer.hyper":"超焦距 {v}","answer.theory":"理论值 {v}","answer.theoryDiff":"理论值 {v}，已进入衍射",
  "answer.impossible":"办不到","answer.impossibleNote":"即使缩到最小光圈也不够",
  "answer.expNote":"与原设置等量曝光","answer.expClipped":"已达上下限，曝光相差 {v} 级",
@@ -435,7 +460,7 @@ const MESSAGES={
  "step1.title":"你要拍多远到多远？","step1.sub":"从最近的主体到最远的主体，这段距离内都要清晰。",
  "step2.title":"你用什么器材？","step2.sub":"相机画幅和镜头焦距会直接决定景深深浅。",
  "step3.title":"实际拍摄设置","step3.sub":"拉动看看绿色范围有没有盖住虚线框，盖住就成功。",
- "field.range":"距离范围","field.rangeTo":"到","field.scenarios":"常见场景",
+ "field.range":"距离范围","field.rangeTo":"到","field.infinity":"最远距离设为无限远","field.scenarios":"常见场景",
  "field.sensor":"相机画幅","field.focal":"镜头焦距","field.framing":"换画幅时","field.quality":"画质要求",
  "field.iso":"ISO 感光度","field.compensate":"改光圈时",
  "field.aperture":"光圈","field.shutter":"快门","field.focusDist":"对焦距离",
@@ -464,7 +489,7 @@ const MESSAGES={
  "th.aperture":"光圈","th.nearest":"最近清晰","th.farthest":"最远清晰","th.dof":"景深","th.enough":"够不够",
  "note.diffraction":"△ 代表已进入衍射范围，光圈再缩小整体锐度反而会下降。",
  "foot.privacy":"全部在你的浏览器计算，不会上传任何数据。",
- "a11y.near":"最近距离","a11y.far":"最远距离","a11y.width":"宽","a11y.height":"高","a11y.ruler":"景深覆盖示意图",
+ "a11y.near":"最近距离","a11y.far":"最远距离","a11y.focusHandle":"拖动调整对焦距离","a11y.nearHandle":"拖动调整最近距离","a11y.farHandle":"拖动调整最远距离","a11y.width":"宽","a11y.height":"高","a11y.ruler":"景深覆盖示意图",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"无限远","unit.optM":"米 (m)","unit.optFt":"英尺 (ft)",
  "sensor.mf":"中画幅 44×33","sensor.ff":"全画幅 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"M4/3 17.3×13",
@@ -477,9 +502,9 @@ const MESSAGES={
  "framing.focal":"沿用同一颗镜头（视角会变）","framing.fov":"保持相同视角（自动换算焦距）",
  "comp.iso":"自动调 ISO","comp.shutter":"自动调快门","comp.off":"不补偿（手动）",
  "scenario.group":"合影","scenario.street":"街拍","scenario.event":"活动",
- "scenario.landscape":"风景","scenario.cctv":"监控",
+ "scenario.landscape":"风景","scenario.cctv":"监控","scenario.hyperLandscape":"超焦距风景","scenario.stars":"星空",
  "gloss.focus":"对焦距离","gloss.focus.body":"相机对焦在哪个距离。不是对在最近或最远，而是对在能前后平均分配清晰范围的位置。",
- "gloss.stop":"最小可用光圈","gloss.stop.body":"f 值最小到这里，再开大景深就不够。数字越大光圈越小、景深越深。",
+ "gloss.stop":"景深所需光圈","gloss.stop.body":"这是能覆盖目标范围的最大开口。再开大一级，景深就不够；f 值越大，光圈越小、景深越深。",
  "gloss.coc":"弥散圆直径","gloss.coc.body":"一个点在传感器上可以糊到多大，人眼还是觉得它清晰。这是主观标准，不是物理界线。",
  "gloss.hyper":"超焦距","gloss.hyper.body":"对焦在这个距离时，从它的一半到无限远都会清晰。拍风景常用。",
  "gloss.diff":"衍射","gloss.diff.body":"光圈缩太小会因为衍射让整张照片变钝。表格中的 △ 就是提醒你已经越线。",
@@ -490,7 +515,7 @@ const MESSAGES={
  "meta.desc":"Enter the distance range you need sharp and get the focus distance and aperture instantly.",
  "app.title":"Where do I focus? Which aperture?",
  "app.tagline":"Tell me the near and far distance — I'll work out the rest.",
- "answer.focus":"Focus distance","answer.stop":"Smallest usable aperture","answer.exposure":"Exposure triangle",
+ "answer.focus":"Recommended focus distance","answer.hyperLabel":"Hyperfocal distance","answer.stop":"Widest usable aperture","answer.exposure":"Recommended exposure",
  "answer.hyper":"Hyperfocal {v}","answer.theory":"Exact value {v}","answer.theoryDiff":"Exact value {v} · diffraction limited",
  "answer.impossible":"Not possible","answer.impossibleNote":"Even the smallest aperture is not enough",
  "answer.expNote":"Same brightness as your starting point","answer.expClipped":"Hit the limits — {v} stops off",
@@ -504,7 +529,7 @@ const MESSAGES={
  "step1.title":"What range needs to be sharp?","step1.sub":"From the nearest subject to the farthest — everything in between must be in focus.",
  "step2.title":"What gear are you using?","step2.sub":"Sensor size and focal length drive how deep the depth of field is.",
  "step3.title":"Shooting settings","step3.sub":"Drag the sliders until the green band covers the dashed box.",
- "field.range":"Distance range","field.rangeTo":"to","field.scenarios":"Common scenarios",
+ "field.range":"Distance range","field.rangeTo":"to","field.infinity":"Set far distance to infinity","field.scenarios":"Common scenarios",
  "field.sensor":"Sensor format","field.focal":"Focal length","field.framing":"When changing format","field.quality":"Quality target",
  "field.iso":"ISO sensitivity","field.compensate":"When aperture changes",
  "field.aperture":"Aperture","field.shutter":"Shutter","field.focusDist":"Focus distance",
@@ -533,7 +558,7 @@ const MESSAGES={
  "th.aperture":"Aperture","th.nearest":"Nearest sharp","th.farthest":"Farthest sharp","th.dof":"Depth","th.enough":"Covers?",
  "note.diffraction":"△ means you are past the diffraction limit — stopping down further reduces overall sharpness.",
  "foot.privacy":"Everything is calculated in your browser. Nothing is uploaded.",
- "a11y.near":"Near distance","a11y.far":"Far distance","a11y.width":"Width","a11y.height":"Height","a11y.ruler":"Depth of field coverage diagram",
+ "a11y.near":"Near distance","a11y.far":"Far distance","a11y.focusHandle":"Drag to adjust focus distance","a11y.nearHandle":"Drag to adjust near distance","a11y.farHandle":"Drag to adjust far distance","a11y.width":"Width","a11y.height":"Height","a11y.ruler":"Depth of field coverage diagram",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"infinity","unit.optM":"Metres (m)","unit.optFt":"Feet (ft)",
  "sensor.mf":"Medium format 44×33","sensor.ff":"Full frame 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"Micro 4/3 17.3×13",
@@ -546,9 +571,9 @@ const MESSAGES={
  "framing.focal":"Keep the same lens (framing changes)","framing.fov":"Keep the same framing (snap focal length)",
  "comp.iso":"Adjust ISO","comp.shutter":"Adjust shutter","comp.off":"No compensation (manual)",
  "scenario.group":"Group photo","scenario.street":"Street","scenario.event":"Event",
- "scenario.landscape":"Landscape","scenario.cctv":"Surveillance",
+ "scenario.landscape":"Landscape","scenario.cctv":"Surveillance","scenario.hyperLandscape":"Hyperfocal landscape","scenario.stars":"Stars",
  "gloss.focus":"Focus distance","gloss.focus.body":"Where the lens is focused. Not the nearest or farthest subject, but the point that balances sharpness front and back.",
- "gloss.stop":"Smallest usable aperture","gloss.stop.body":"Open wider than this and depth of field falls short. Larger f-numbers mean a smaller opening and deeper focus.",
+ "gloss.stop":"Widest usable aperture","gloss.stop.body":"This is the widest aperture that covers the target range. Open any wider and depth of field falls short. Larger f-numbers mean a smaller opening and deeper focus.",
  "gloss.coc":"Circle of confusion","gloss.coc.body":"How large a point may blur on the sensor while still looking sharp. It is a perceptual convention, not a physical boundary.",
  "gloss.hyper":"Hyperfocal distance","gloss.hyper.body":"Focus here and everything from half that distance to infinity is acceptably sharp. Common for landscapes.",
  "gloss.diff":"Diffraction","gloss.diff.body":"Stopping down too far softens the whole frame through diffraction. The △ marks where you cross that line.",
@@ -559,7 +584,7 @@ const MESSAGES={
  "meta.desc":"ピントを合わせたい距離を入れるだけで、絞りとピント位置がすぐ分かります。",
  "app.title":"どこにピントを合わせる？絞りは？",
  "app.tagline":"手前と奥の距離を入れれば、あとは計算します。",
- "answer.focus":"ピント距離","answer.stop":"使える最小の絞り","answer.exposure":"露出の組み合わせ",
+ "answer.focus":"推奨ピント距離","answer.hyperLabel":"過焦点距離","answer.stop":"必要な絞り","answer.exposure":"推奨露出",
  "answer.hyper":"過焦点距離 {v}","answer.theory":"理論値 {v}","answer.theoryDiff":"理論値 {v}・回折の影響あり",
  "answer.impossible":"実現できません","answer.impossibleNote":"最小絞りでも足りません",
  "answer.expNote":"元の設定と同じ明るさ","answer.expClipped":"限界に達し、{v} 段ずれています",
@@ -573,7 +598,7 @@ const MESSAGES={
  "step1.title":"どこからどこまで撮りますか？","step1.sub":"一番手前の被写体から一番奥まで、その範囲すべてをシャープにします。",
  "step2.title":"使用する機材は？","step2.sub":"センサーサイズと焦点距離が被写界深度を大きく左右します。",
  "step3.title":"撮影設定","step3.sub":"緑の帯が破線の枠を覆えば成功です。",
- "field.range":"距離の範囲","field.rangeTo":"〜","field.scenarios":"よくある場面",
+ "field.range":"距離の範囲","field.rangeTo":"〜","field.infinity":"奥を無限遠に設定","field.scenarios":"よくある場面",
  "field.sensor":"センサーサイズ","field.focal":"焦点距離","field.framing":"サイズ変更時","field.quality":"画質の基準",
  "field.iso":"ISO感度","field.compensate":"絞り変更時",
  "field.aperture":"絞り","field.shutter":"シャッター","field.focusDist":"ピント距離",
@@ -602,7 +627,7 @@ const MESSAGES={
  "th.aperture":"絞り","th.nearest":"手前の限界","th.farthest":"奥の限界","th.dof":"深度","th.enough":"足りる？",
  "note.diffraction":"△ は回折限界を超えたことを示します。さらに絞ると全体の解像感が下がります。",
  "foot.privacy":"すべてブラウザ内で計算され、データは送信されません。",
- "a11y.near":"手前の距離","a11y.far":"奥の距離","a11y.width":"幅","a11y.height":"高さ","a11y.ruler":"被写界深度の範囲図",
+ "a11y.near":"手前の距離","a11y.far":"奥の距離","a11y.focusHandle":"ドラッグしてピント距離を調整","a11y.nearHandle":"ドラッグして手前を調整","a11y.farHandle":"ドラッグして奥を調整","a11y.width":"幅","a11y.height":"高さ","a11y.ruler":"被写界深度の範囲図",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"無限遠","unit.optM":"メートル (m)","unit.optFt":"フィート (ft)",
  "sensor.mf":"中判 44×33","sensor.ff":"フルサイズ 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"マイクロフォーサーズ 17.3×13",
@@ -615,9 +640,9 @@ const MESSAGES={
  "framing.focal":"同じレンズを使う（画角が変わる）","framing.fov":"同じ画角を保つ（焦点距離を自動調整）",
  "comp.iso":"ISOで補正","comp.shutter":"シャッターで補正","comp.off":"補正しない（マニュアル）",
  "scenario.group":"集合写真","scenario.street":"スナップ","scenario.event":"イベント",
- "scenario.landscape":"風景","scenario.cctv":"監視カメラ",
+ "scenario.landscape":"風景","scenario.cctv":"監視カメラ","scenario.hyperLandscape":"過焦点風景","scenario.stars":"星空",
  "gloss.focus":"ピント距離","gloss.focus.body":"レンズを合わせる距離。最も手前でも奥でもなく、前後のシャープさが均等になる位置です。",
- "gloss.stop":"使える最小の絞り","gloss.stop.body":"これより開けると深度が足りません。f値が大きいほど開口は小さく、深度は深くなります。",
+ "gloss.stop":"必要な絞り","gloss.stop.body":"目標範囲をカバーできる最も開いた絞りです。これより開けると深度が足りません。f値が大きいほど開口は小さく、深度は深くなります。",
  "gloss.coc":"許容錯乱円","gloss.coc.body":"点がセンサー上でどこまでボケても鮮明に見えるかという基準。物理的な境界ではなく知覚上の慣例です。",
  "gloss.hyper":"過焦点距離","gloss.hyper.body":"ここにピントを合わせると、その半分の距離から無限遠までが実用上シャープになります。風景撮影で多用されます。",
  "gloss.diff":"回折","gloss.diff.body":"絞りすぎると回折で画面全体が甘くなります。表の △ がその境界を示します。",
@@ -684,7 +709,7 @@ const SENSORS=[
  {id:"i30",w:4.8,h:3.6,coc:.0040}
 ];
 const FOCALS=[4,6,8,12,14,16,20,24,28,35,50,85,105,135,200,300];
-const STOPS=[1.0,1.2,1.4,1.8,2.0,2.8,4,5.6,8,11,16,22,32];
+const STOPS=[1.0,1.4,2.0,2.8,4,5.6,8,11,16,22,32];
 const ISOS=[50,100,200,400,800,1600,3200,6400,12800,25600,51200];
 const SHUTTERS=[30,15,8,4,2,1,1/2,1/4,1/8,1/15,1/30,1/60,1/125,1/250,
                 1/500,1/1000,1/2000,1/4000,1/8000];
@@ -696,13 +721,15 @@ const FRAMINGS=["focal","fov"];
 const COMPS=["iso","shutter","off"];
 const SCENARIOS=[
  {id:"group",near:3,far:6},{id:"street",near:5,far:12},{id:"event",near:8,far:13},
- {id:"landscape",near:10,far:200},{id:"cctv",near:4,far:20}
+ {id:"landscape",near:10,far:200},{id:"cctv",near:4,far:20},
+ {id:"hyperLandscape",near:5,far:200,infinity:true},
+ {id:"stars",near:10,far:200,infinity:true}
 ];
 const GLOSSARY=["focus","stop","coc","hyper","diff","exposure"];
 const LAMBDA=.00055, FF_DIAG=Math.hypot(36,24), FT=3.280839895;
 
 const DEF=Object.freeze({sensor:"ff",sw:36,sh:24,mp:24,focal:35,focalIdeal:null,
- quality:"normal",framing:"focal",stop:2.8,focus:9.9,near:8,far:13,unit:"m",
+ quality:"normal",framing:"focal",stop:2.8,focus:9.9,near:8,far:13,farInfinity:false,unit:"m",
  iso:400,shutter:1/125,compensate:"iso",drift:0});
 
 /* ═════════════════════════════════════════════════
@@ -769,6 +796,34 @@ const F={
  snap:v=>STOPS.find(n=>n>=v)??STOPS.at(-1)
 };
 
+/* Logarithmic ruler mapping gives near distances usable space across large ranges. */
+const DistanceScale={
+ minM:.1,
+ pos(m,maxM){
+  const lo=Math.log1p(this.minM),hi=Math.log1p(Math.max(this.minM,maxM));
+  return hi===lo?0:(Math.log1p(Math.max(this.minM,m))-lo)/(hi-lo);
+ },
+ value(ratio,maxM){
+  const lo=Math.log1p(this.minM),hi=Math.log1p(Math.max(this.minM,maxM));
+  return Math.expm1(lo+Math.max(0,Math.min(1,ratio))*(hi-lo));
+ },
+ ticks(maxM,infinite){
+  const candidates=[.1,.2,.5,1,2,5,10,20,50,100,200,500,1000,2000,5000,10000];
+  const out=[],minGap=.095;
+  for(const value of candidates){
+   if(value>maxM*1.001)break;
+   const pos=this.pos(value,maxM);
+   if(!out.length||pos-out.at(-1).pos>=minGap)out.push({value,pos});
+  }
+  if(!out.length||1-out.at(-1).pos>=minGap)out.push({value:maxM,pos:1});
+  if(infinite){
+   if(out.length&&1-out.at(-1).pos<minGap)out.pop();
+   out.push({value:Infinity,pos:1});
+  }
+  return out;
+ }
+};
+
 /* ═════════════════════════════════════════════════
    5. State
    ═════════════════════════════════════════════════ */
@@ -791,25 +846,37 @@ const ok=(v,min,fb)=>Number.isFinite(v)&&v>=min?v:fb;
    7. Derive — state → view model
    ═════════════════════════════════════════════════ */
 function derive(d){
- const s=d.focus*1e3, tn=d.near*1e3, tf=d.far*1e3;
+ const s=d.focus*1e3, tn=d.near*1e3, tf=d.farInfinity?Infinity:d.far*1e3;
  const pitch=O.pitch(d.sw,d.sh,d.mp);
  const base=(SENSORS.find(x=>x.id===d.sensor)??SENSORS[1]).coc;
  const q=QUALITY.find(x=>x.id===d.quality)??QUALITY[1];
  const coc=q.mult===null?pitch*2:base*q.mult;
  const lim=O.limits(d.focal,d.stop,coc,s);
- const reqN=O.reqStop(d.focal,coc,tn,tf);
+ // For an infinity target, choose the focus that places the near DoF limit at tn.
+ // Under this file's distance convention, s=2*tn and H=2*tn-f.
+ const optF=d.farInfinity?2*tn:O.optFocus(d.focal,tn,tf);
+ const reqN=d.farInfinity
+  ?d.focal*d.focal/(coc*(2*tn-2*d.focal))
+  :O.reqStop(d.focal,coc,tn,tf);
+ const feasible=Number.isFinite(reqN)&&reqN>0&&reqN<=STOPS.at(-1);
+ const recStop=feasible?F.snap(reqN):STOPS.at(-1);
+ const recExp=Exp.compensate(
+  d.drift+Exp.stops(d.stop,recStop),d.iso,d.shutter,d.compensate
+ );
  const hh=Exp.handheld(d.focal,O.crop(d.sw,d.sh));
  return{pitch,coc,lim,s,tn,tf,reqN,
-  optF:O.optFocus(d.focal,tn,tf),
-  snap:F.snap(reqN),
+  optF,
+  snap:recStop,
+  recommendedH:feasible?O.hyper(d.focal,recStop,coc):Infinity,
+  recExp,
   diffN:O.diffract(coc),
   equiv:d.focal*O.crop(d.sw,d.sh),
   handheld:hh,
   tooSlow:d.shutter>hh*1.05,
-  covered:O.covers(lim,tn,tf),
+  covered:lim.near<=tn&&(d.farInfinity?!Number.isFinite(lim.far):lim.far>=tf),
   diffracted:d.stop>O.diffract(coc),
-  valid:tf>tn,
-  feasible:Number.isFinite(reqN)&&reqN>0&&reqN<=STOPS.at(-1)};
+  valid:d.farInfinity?tn>d.focal:tf>tn,
+  feasible};
 }
 
 /* ═════════════════════════════════════════════════
@@ -827,6 +894,9 @@ const V={
   opts($("iso"),ISOS.map(v=>({value:v,label:`ISO ${v}`})),d.iso);
   opts($("compensate"),COMPS.map(c=>({value:c,label:t(`comp.${c}`)})),d.compensate);
   $("rLabel").textContent=t("ruler.target");
+  $("rFocus").setAttribute("aria-label",t("a11y.focusHandle"));
+  $("rNearHandle").setAttribute("aria-label",t("a11y.nearHandle"));
+  $("rFarHandle").setAttribute("aria-label",t("a11y.farHandle"));
   $("apRange").max=STOPS.length-1;
   $("shRange").max=SHUTTERS.length-1;
   V.scenarios(d);
@@ -838,10 +908,10 @@ const V={
    const b=document.createElement("button");
    b.className="chip";b.type="button";
    const lo=U.n(sc.near*U.factor(),0);
-   const hi=sc.far>=200?"∞":U.n(sc.far*U.factor(),0);
-   b.textContent=`${t(`scenario.${sc.id}`)} ${lo}–${hi} ${U.suffix()}`;
-   b.dataset.near=sc.near;b.dataset.far=sc.far;
-   b.onclick=()=>S.set({near:sc.near,far:sc.far});
+   const hi=sc.infinity?t("unit.infinity"):U.n(sc.far*U.factor(),0);
+   b.textContent=`${t(`scenario.${sc.id}`)} ${lo}–${hi}${sc.infinity?"":" "+U.suffix()}`;
+   b.dataset.near=sc.near;b.dataset.far=sc.far;b.dataset.infinity=String(!!sc.infinity);
+   b.onclick=()=>S.set({near:sc.near,far:sc.far,farInfinity:!!sc.infinity});
    return b;}));
  },
 
@@ -856,6 +926,8 @@ const V={
   const stepDist=d.unit==="ft"?1:0.5;
   $("near").value=U.out(d.near); $("near").step=stepDist;
   $("far").value=U.out(d.far);   $("far").step=stepDist;
+  $("far").disabled=d.farInfinity;
+  $("farInfinity").checked=d.farInfinity;
   $("sensor").value=d.sensor;
   $("focal").value=FOCALS.includes(d.focal)?d.focal:"";
   $("quality").value=d.quality; $("framing").value=d.framing;
@@ -868,16 +940,24 @@ const V={
   $("shRange").value=Math.max(0,SHUTTERS.indexOf(Exp.snap(SHUTTERS,d.shutter)));
   $("shVal").textContent=Exp.label(d.shutter);
 
-  const topM=Math.max(60,Math.ceil(d.far*1.5));
-  const r=$("fdRange");
-  r.min=U.out(0.5); r.max=U.out(topM); r.step=d.unit==="ft"?0.5:0.1;
-  r.value=Math.min(U.out(d.focus),U.out(topM));
-  $("fdMin").textContent=U.disp(500,U.dec());
+  const topM=Math.max(60,Math.ceil(
+   d.farInfinity?Math.max(d.near*4,d.focus*1.5):Math.max(d.far*1.5,d.focus*1.3)
+  ));
+  const r=$("fdRange"), focusMin=.5;
+  r.min=0; r.max=1000; r.step=1;
+  r.value=Math.round(DistanceScale.pos(Math.max(focusMin,d.focus),topM)*1000);
+  r.setAttribute("aria-valuemin",focusMin);
+  r.setAttribute("aria-valuemax",topM);
+  r.setAttribute("aria-valuenow",d.focus.toFixed(2));
+  r.setAttribute("aria-valuetext",U.disp(d.focus*1000));
+  V.focusScale={minM:focusMin,maxM:topM};
+  $("fdMin").textContent=U.disp(focusMin*1000,U.dec());
   $("fdMax").textContent=U.disp(topM*1000,0);
   $("fdVal").textContent=U.disp(d.focus*1000);
 
   [...$("scenarios").children].forEach(b=>
-   b.setAttribute("aria-pressed",String(+b.dataset.near===d.near&&+b.dataset.far===d.far)));
+   b.setAttribute("aria-pressed",String(+b.dataset.near===d.near&&+b.dataset.far===d.far&&
+    (b.dataset.infinity==="true")===d.farInfinity)));
  },
 
  verdict(d,v){
@@ -886,22 +966,24 @@ const V={
    box.dataset.ok="false"; $("vIcon").textContent="!";
    $("vFlag").textContent=t("verdict.badFlag");
    $("vMsg").textContent=t("verdict.badMsg");
-   $("aFocus").textContent="—"; $("aStop").textContent="—"; $("aExp").textContent="—";
-   $("aFocusNote").textContent=""; $("aStopNote").textContent=""; $("aExpNote").textContent="";
+   $("aFocus").textContent="—"; $("aHyper").textContent="—"; $("aStop").textContent="—"; $("aExp").textContent="—";
+   $("aFocusNote").textContent=""; $("aHyperNote").textContent=""; $("aStopNote").textContent=""; $("aExpNote").textContent="";
    $("btnApply").disabled=true; return;
   }
   $("btnApply").disabled=false;
   $("aFocus").textContent=U.disp(v.optF);
-  $("aFocusNote").textContent=t("answer.hyper",{v:U.disp(v.lim.H)});
+  $("aFocusNote").textContent="";
+  $("aHyper").textContent=v.feasible?U.disp(v.recommendedH):"—";
+  $("aHyperNote").textContent="";
   $("aStop").textContent=v.feasible?`f/${U.n(v.snap,1)}`:t("answer.impossible");
   $("aStopNote").textContent=v.feasible
    ? t(v.snap>v.diffN?"answer.theoryDiff":"answer.theory",{v:F.stop(v.reqN)})
    : t("answer.impossibleNote");
 
-  $("aExp").textContent=`f/${U.n(d.stop,1)} · ${Exp.label(d.shutter)} · ISO ${d.iso}`;
-  const drift=Math.abs(d.drift)>0.05;
+  $("aExp").textContent=`f/${U.n(v.snap,1)} · ${Exp.label(v.recExp.shutter)} · ISO ${v.recExp.iso}`;
+  const drift=Math.abs(v.recExp.drift)>0.05;
   $("aExpNote").textContent=drift
-   ? t("answer.expClipped",{v:U.n(Math.abs(d.drift),1)}) : t("answer.expNote");
+   ? t("answer.expClipped",{v:U.n(Math.abs(v.recExp.drift),1)}) : t("answer.expNote");
   $("aExpNote").className="answer__note"+(drift?" exp-warn":"");
 
   box.dataset.ok=String(v.covered);
@@ -913,16 +995,29 @@ const V={
  },
 
  ruler(v){
-  const cap=Math.max(v.tf*1.35,Number.isFinite(v.lim.far)?v.lim.far*1.08:v.tf*1.9,v.s*1.3);
-  const p=x=>Math.max(0,Math.min(100,x/cap*100));
+  const targetFar=Number.isFinite(v.tf)?v.tf:Math.max(v.tn*4,v.s*1.8);
+  const cap=Math.max(500,targetFar*1.35,Number.isFinite(v.lim.far)?v.lim.far*1.08:targetFar*1.9,v.s*1.3);
+  const capM=cap/1000;
+  const p=x=>Math.max(0,Math.min(100,DistanceScale.pos(x/1000,capM)*100));
   const end=p(Number.isFinite(v.lim.far)?v.lim.far:cap);
   Object.assign($("rDof").style,{left:p(v.lim.near)+"%",width:(end-p(v.lim.near))+"%"});
-  Object.assign($("rTarget").style,{left:p(v.tn)+"%",width:(p(v.tf)-p(v.tn))+"%"});
-  $("rLabel").style.left=((p(v.tn)+p(v.tf))/2)+"%";
+  const nearP=p(v.tn), targetEnd=Number.isFinite(v.tf)?p(v.tf):100;
+  Object.assign($("rTarget").style,{left:nearP+"%",width:(targetEnd-nearP)+"%"});
+  $("rNearHandle").style.left=nearP+"%";
+  $("rFarHandle").style.left=targetEnd+"%";
+  $("rFarHandle").hidden=!Number.isFinite(v.tf);
+  $("rLabel").style.left=((nearP+targetEnd)/2)+"%";
   $("rFocus").style.left=p(v.s)+"%";
-  $("rTicks").replaceChildren(...[0,.25,.5,.75,1].map(r=>{
-   const n=document.createElement("span");
-   n.textContent=U.raw(cap*r,0)+U.suffix();return n;}));
+  const ariaMax=Math.max(.1,capM);
+  for(const [id,val] of [["rFocus",v.s/1000],["rNearHandle",v.tn/1000],["rFarHandle",Number.isFinite(v.tf)?v.tf/1000:ariaMax]]){
+   const el=$(id);el.setAttribute("aria-valuemin","0.1");el.setAttribute("aria-valuemax",ariaMax.toFixed(1));
+   el.setAttribute("aria-valuenow",val.toFixed(2));
+  }
+  V.rulerScale={capMm:cap,capM};
+  $("rTicks").replaceChildren(...DistanceScale.ticks(capM,!Number.isFinite(v.tf)).map(tick=>{
+   const n=document.createElement("span");n.style.left=(tick.pos*100)+"%";
+   n.textContent=Number.isFinite(tick.value)?U.disp(tick.value*1000,tick.value<1?1:0):t("unit.infinity");
+   return n;}));
  },
 
  hints(d,v){
@@ -981,6 +1076,18 @@ const V={
    9. Persistence — URL hash (share) + localStorage (recall)
    ═════════════════════════════════════════════════ */
 /** Coerce an untrusted record against DEF's shape. */
+const ENUMS={
+ sensor:new Set(SENSORS.map(x=>x.id)),
+ quality:new Set(QUALITY.map(x=>x.id)),
+ framing:new Set(FRAMINGS),
+ compensate:new Set(COMPS),
+ unit:new Set(["m","ft"])
+};
+const LIMITS={
+ sw:[1,100],sh:[1,100],mp:[1,1000],focal:[1,2000],
+ focus:[.01,1e6],near:[.01,1e6],far:[.01,1e6],
+ stop:[.5,128],iso:[1,1e7],shutter:[1/100000,3600],drift:[-100,100]
+};
 function sanitise(src){
  const o={};
  for(const[k,dv]of Object.entries(DEF)){
@@ -988,9 +1095,13 @@ function sanitise(src){
   if(val===undefined||val===null)continue;
   if(typeof dv==="number"){
    const n=typeof val==="number"?val:parseFloat(val);
-   if(Number.isFinite(n)&&n>0)o[k]=n;
+   const [lo,hi]=LIMITS[k]??[-Number.MAX_VALUE,Number.MAX_VALUE];
+   if(Number.isFinite(n)&&n>=lo&&n<=hi)o[k]=n;
   }else if(typeof dv==="string"){
-   if(typeof val==="string"&&val)o[k]=val;
+   if(typeof val==="string"&&val&&(!ENUMS[k]||ENUMS[k].has(val)))o[k]=val;
+  }else if(typeof dv==="boolean"){
+   if(val===true||val==="true")o[k]=true;
+   else if(val===false||val==="false")o[k]=false;
   }
  }
  return Object.keys(o).length?o:null;
@@ -1030,6 +1141,7 @@ for(const id of["near","far"])
   const v=parseFloat(e.target.value);
   if(Number.isFinite(v))S.set({[id]:U.in(v)});
  });
+$("farInfinity").addEventListener("change",e=>S.set({farInfinity:e.target.checked}));
 
 for(const[id,min]of Object.entries({sw:1,sh:1,mp:1,focalNum:1}))
  $(id).addEventListener("input",e=>{
@@ -1056,20 +1168,89 @@ $("framing").onchange = e=>S.set({framing:e.target.value});
 /** Aperture is the only control that rebalances the exposure triangle. */
 $("apRange").oninput=e=>{
  const next=STOPS[+e.target.value], d=S.d;
- const r=Exp.compensate(Exp.stops(d.stop,next),d.iso,d.shutter,d.compensate);
+ const r=Exp.compensate(d.drift+Exp.stops(d.stop,next),d.iso,d.shutter,d.compensate);
  S.set({stop:next,iso:r.iso,shutter:r.shutter,drift:r.drift});
 };
 $("iso").onchange        = e=>S.set({iso:+e.target.value,drift:0});
 $("shRange").oninput     = e=>S.set({shutter:SHUTTERS[+e.target.value],drift:0});
-$("compensate").onchange = e=>S.set({compensate:e.target.value,drift:0});
-$("fdRange").oninput     = e=>S.set({focus:U.in(+e.target.value)});
+$("compensate").onchange = e=>S.set({compensate:e.target.value});
+$("fdRange").oninput=e=>{
+ const scale=V.focusScale??{minM:.5,maxM:60};
+ const ratio=+e.target.value/1000;
+ S.set({focus:Math.max(scale.minM,DistanceScale.value(ratio,scale.maxM))});
+};
+
+/* Direct manipulation for the DoF ruler: focus, near edge, far edge, or whole range. */
+const RulerDrag={
+ active:null,
+ minGap:0.1,
+ valueFromEvent(e){
+  const rect=$("ruler").getBoundingClientRect();
+  const ratio=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
+  return DistanceScale.value(ratio,V.rulerScale?.capM??1);
+ },
+ snap(v){
+  const step=S.d.unit==="ft"?U.in(.1):.1;
+  return Math.max(.1,Math.round(v/step)*step);
+ },
+ start(e){
+  const mode=e.target.closest("[data-drag]")?.dataset.drag;
+  if(!mode||!V.rulerScale)return;
+  e.preventDefault();
+  const d=S.d;
+  RulerDrag.active={mode,pointerId:e.pointerId,startX:RulerDrag.valueFromEvent(e),
+   near:d.near,far:d.far,focus:d.focus,farInfinity:d.farInfinity};
+  $("ruler").dataset.dragging="true";$("ruler").dataset.dragMode=mode;
+  $("ruler").setPointerCapture(e.pointerId);
+ },
+ move(e){
+  const a=RulerDrag.active;if(!a||a.pointerId!==e.pointerId)return;
+  e.preventDefault();
+  const x=RulerDrag.snap(RulerDrag.valueFromEvent(e)),gap=RulerDrag.minGap;
+  if(a.mode==="focus")S.set({focus:x});
+  else if(a.mode==="near"){
+   const max=a.farInfinity?Math.max(gap,a.focus*4):Math.max(gap,S.d.far-gap);
+   S.set({near:Math.min(x,max)});
+  }else if(a.mode==="far"){
+   S.set({far:Math.max(x,S.d.near+gap),farInfinity:false});
+  }else if(a.mode==="range"){
+   const delta=x-a.startX;
+   if(a.farInfinity){
+    S.set({near:Math.max(.1,a.near+delta),focus:Math.max(.1,a.focus+delta)});
+   }else{
+    const width=a.far-a.near;
+    const near=Math.max(.1,a.near+delta);
+    S.set({near,far:near+width});
+   }
+  }
+ },
+ end(e){
+  if(!RulerDrag.active||RulerDrag.active.pointerId!==e.pointerId)return;
+  RulerDrag.active=null;delete $("ruler").dataset.dragging;delete $("ruler").dataset.dragMode;
+  if($("ruler").hasPointerCapture(e.pointerId))$("ruler").releasePointerCapture(e.pointerId);
+ },
+ key(e){
+  const mode=e.target.dataset.drag;if(!mode||![/ArrowLeft/,/ArrowRight/].some(r=>r.test(e.key)))return;
+  e.preventDefault();
+  const dir=e.key==="ArrowRight"?1:-1;
+  const step=(e.shiftKey?1:.1)*dir,d=S.d,gap=RulerDrag.minGap;
+  if(mode==="focus")S.set({focus:Math.max(.1,d.focus+step)});
+  else if(mode==="near")S.set({near:Math.max(.1,Math.min(d.near+step,d.farInfinity?d.near+step:d.far-gap))});
+  else if(mode==="far")S.set({far:Math.max(d.near+gap,d.far+step),farInfinity:false});
+ }
+};
+$("ruler").addEventListener("pointerdown",RulerDrag.start);
+$("ruler").addEventListener("pointermove",RulerDrag.move);
+$("ruler").addEventListener("pointerup",RulerDrag.end);
+$("ruler").addEventListener("pointercancel",RulerDrag.end);
+$("ruler").addEventListener("keydown",RulerDrag.key);
 
 $("unit").onchange=e=>{S.set({unit:e.target.value});V.localise(S.d);V.render(S.d)};
 $("lang").onchange=e=>{I18n.set(e.target.value);V.localise(S.d);V.render(S.d)};
 
 $("btnApply").onclick=()=>{
  const d=S.d, next=V.last.feasible?V.last.snap:STOPS.at(-1);
- const r=Exp.compensate(Exp.stops(d.stop,next),d.iso,d.shutter,d.compensate);
+ const r=Exp.compensate(d.drift+Exp.stops(d.stop,next),d.iso,d.shutter,d.compensate);
  S.set({focus:+(V.last.optF/1000).toFixed(2),stop:next,
         iso:r.iso,shutter:r.shutter,drift:r.drift});
 };
