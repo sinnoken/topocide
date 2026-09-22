@@ -107,6 +107,11 @@ p{margin:0}
 .f__label{font-size:.88rem;font-weight:700}
 .f__hint{font-size:.77rem;color:var(--faint);min-height:1.1em}
 .f__hint--warn{color:var(--warn);font-weight:650}
+.focal-control{display:grid;grid-template-columns:42px minmax(0,1fr) 42px;gap:7px;align-items:stretch}
+.focal-step{font:inherit;font-size:1.15rem;font-weight:800;line-height:1;cursor:pointer;
+  color:var(--brand);background:var(--sunken);border:1px solid var(--line2);border-radius:var(--r1)}
+.focal-step:hover{border-color:var(--brand);background:var(--brand-soft)}
+.focal-step:active{transform:translateY(1px)}
 select,input[type=number]{width:100%;min-width:0;padding:10px 11px;font:inherit;font-size:.95rem;
   color:var(--fg);background:var(--sunken);border:1px solid var(--line2);border-radius:var(--r1)}
 input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -241,7 +246,11 @@ tbody tr[data-now=true]{background:var(--brand-soft)}
     </div>
     <div class="f">
       <label class="f__label" for="focal" data-i18n="field.focal"></label>
-      <select id="focal"></select>
+      <div class="focal-control">
+        <button class="focal-step" id="focalMinus" type="button">−</button>
+        <select id="focal"></select>
+        <button class="focal-step" id="focalPlus" type="button">＋</button>
+      </div>
       <p class="f__hint" id="focalHint"></p>
     </div>
     <div class="f">
@@ -420,7 +429,7 @@ const MESSAGES={
  "th.aperture":"光圈","th.nearest":"最近清楚","th.farthest":"最遠清楚","th.dof":"景深","th.enough":"夠不夠",
  "note.diffraction":"△ 代表已進入繞射範圍，光圈再縮小整體銳利度反而會下降。",
  "foot.privacy":"全部在你的瀏覽器計算，不會上傳任何資料。",
- "a11y.near":"最近距離","a11y.far":"最遠距離","a11y.focusHandle":"拖曳調整對焦距離","a11y.nearHandle":"拖曳調整最近距離","a11y.farHandle":"拖曳調整最遠距離","a11y.width":"寬","a11y.height":"高","a11y.ruler":"景深覆蓋示意圖",
+ "a11y.near":"最近距離","a11y.far":"最遠距離","a11y.focusHandle":"拖曳調整對焦距離","a11y.focalMinus":"焦距減少 1 mm","a11y.focalPlus":"焦距增加 1 mm","a11y.nearHandle":"拖曳調整最近距離","a11y.farHandle":"拖曳調整最遠距離","a11y.width":"寬","a11y.height":"高","a11y.ruler":"景深覆蓋示意圖",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"無限遠","unit.optM":"公尺 (m)","unit.optFt":"英尺 (ft)",
  "sensor.mf":"中片幅 44×33","sensor.ff":"全片幅 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"M4/3 17.3×13",
@@ -489,7 +498,7 @@ const MESSAGES={
  "th.aperture":"光圈","th.nearest":"最近清晰","th.farthest":"最远清晰","th.dof":"景深","th.enough":"够不够",
  "note.diffraction":"△ 代表已进入衍射范围，光圈再缩小整体锐度反而会下降。",
  "foot.privacy":"全部在你的浏览器计算，不会上传任何数据。",
- "a11y.near":"最近距离","a11y.far":"最远距离","a11y.focusHandle":"拖动调整对焦距离","a11y.nearHandle":"拖动调整最近距离","a11y.farHandle":"拖动调整最远距离","a11y.width":"宽","a11y.height":"高","a11y.ruler":"景深覆盖示意图",
+ "a11y.near":"最近距离","a11y.far":"最远距离","a11y.focusHandle":"拖动调整对焦距离","a11y.focalMinus":"焦距减少 1 mm","a11y.focalPlus":"焦距增加 1 mm","a11y.nearHandle":"拖动调整最近距离","a11y.farHandle":"拖动调整最远距离","a11y.width":"宽","a11y.height":"高","a11y.ruler":"景深覆盖示意图",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"无限远","unit.optM":"米 (m)","unit.optFt":"英尺 (ft)",
  "sensor.mf":"中画幅 44×33","sensor.ff":"全画幅 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"M4/3 17.3×13",
@@ -558,7 +567,7 @@ const MESSAGES={
  "th.aperture":"Aperture","th.nearest":"Nearest sharp","th.farthest":"Farthest sharp","th.dof":"Depth","th.enough":"Covers?",
  "note.diffraction":"△ means you are past the diffraction limit — stopping down further reduces overall sharpness.",
  "foot.privacy":"Everything is calculated in your browser. Nothing is uploaded.",
- "a11y.near":"Near distance","a11y.far":"Far distance","a11y.focusHandle":"Drag to adjust focus distance","a11y.nearHandle":"Drag to adjust near distance","a11y.farHandle":"Drag to adjust far distance","a11y.width":"Width","a11y.height":"Height","a11y.ruler":"Depth of field coverage diagram",
+ "a11y.near":"Near distance","a11y.far":"Far distance","a11y.focusHandle":"Drag to adjust focus distance","a11y.focalMinus":"Decrease focal length by 1 mm","a11y.focalPlus":"Increase focal length by 1 mm","a11y.nearHandle":"Drag to adjust near distance","a11y.farHandle":"Drag to adjust far distance","a11y.width":"Width","a11y.height":"Height","a11y.ruler":"Depth of field coverage diagram",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"infinity","unit.optM":"Metres (m)","unit.optFt":"Feet (ft)",
  "sensor.mf":"Medium format 44×33","sensor.ff":"Full frame 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"Micro 4/3 17.3×13",
@@ -627,7 +636,7 @@ const MESSAGES={
  "th.aperture":"絞り","th.nearest":"手前の限界","th.farthest":"奥の限界","th.dof":"深度","th.enough":"足りる？",
  "note.diffraction":"△ は回折限界を超えたことを示します。さらに絞ると全体の解像感が下がります。",
  "foot.privacy":"すべてブラウザ内で計算され、データは送信されません。",
- "a11y.near":"手前の距離","a11y.far":"奥の距離","a11y.focusHandle":"ドラッグしてピント距離を調整","a11y.nearHandle":"ドラッグして手前を調整","a11y.farHandle":"ドラッグして奥を調整","a11y.width":"幅","a11y.height":"高さ","a11y.ruler":"被写界深度の範囲図",
+ "a11y.near":"手前の距離","a11y.far":"奥の距離","a11y.focusHandle":"ドラッグしてピント距離を調整","a11y.focalMinus":"焦点距離を 1 mm 減らす","a11y.focalPlus":"焦点距離を 1 mm 増やす","a11y.nearHandle":"ドラッグして手前を調整","a11y.farHandle":"ドラッグして奥を調整","a11y.width":"幅","a11y.height":"高さ","a11y.ruler":"被写界深度の範囲図",
  "unit.m":"m","unit.ft":"ft","unit.infinity":"無限遠","unit.optM":"メートル (m)","unit.optFt":"フィート (ft)",
  "sensor.mf":"中判 44×33","sensor.ff":"フルサイズ 36×24","sensor.apsh":"APS-H 28.7×19",
  "sensor.apsc":"APS-C 23.6×15.7","sensor.apscC":"APS-C Canon 22.3×14.9","sensor.m43":"マイクロフォーサーズ 17.3×13",
@@ -895,6 +904,8 @@ const V={
   opts($("compensate"),COMPS.map(c=>({value:c,label:t(`comp.${c}`)})),d.compensate);
   $("rLabel").textContent=t("ruler.target");
   $("rFocus").setAttribute("aria-label",t("a11y.focusHandle"));
+  $("focalMinus").setAttribute("aria-label",t("a11y.focalMinus"));
+  $("focalPlus").setAttribute("aria-label",t("a11y.focalPlus"));
   $("rNearHandle").setAttribute("aria-label",t("a11y.nearHandle"));
   $("rFarHandle").setAttribute("aria-label",t("a11y.farHandle"));
   $("apRange").max=STOPS.length-1;
@@ -1162,6 +1173,31 @@ $("sensor").onchange=e=>{
  S.set(p);
 };
 $("focal").onchange   = e=>S.set({focal:+e.target.value,focalIdeal:null});
+
+/* Focal-length fine adjustment: 1 mm per click, Shift for 5 mm, hold to repeat. */
+const FocalStep={
+ timer:0,interval:0,repeated:false,
+ apply(dir,large=false){
+  const step=large?5:1;
+  S.set({focal:Math.max(1,Math.min(2000,S.d.focal+dir*step)),focalIdeal:null});
+ },
+ start(e,dir){
+  e.preventDefault();FocalStep.repeated=false;
+  FocalStep.timer=setTimeout(()=>{
+   FocalStep.repeated=true;FocalStep.apply(dir,e.shiftKey);
+   FocalStep.interval=setInterval(()=>FocalStep.apply(dir,e.shiftKey),100);
+  },450);
+ },
+ stop(){clearTimeout(FocalStep.timer);clearInterval(FocalStep.interval);FocalStep.timer=0;FocalStep.interval=0;}
+};
+for(const [id,dir] of [["focalMinus",-1],["focalPlus",1]]){
+ const b=$(id);
+ b.addEventListener("pointerdown",e=>FocalStep.start(e,dir));
+ b.addEventListener("pointerup",()=>FocalStep.stop());
+ b.addEventListener("pointercancel",()=>FocalStep.stop());
+ b.addEventListener("pointerleave",()=>FocalStep.stop());
+ b.addEventListener("click",e=>{if(!FocalStep.repeated)FocalStep.apply(dir,e.shiftKey);FocalStep.repeated=false});
+}
 $("quality").onchange = e=>S.set({quality:e.target.value});
 $("framing").onchange = e=>S.set({framing:e.target.value});
 
