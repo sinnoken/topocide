@@ -67,7 +67,11 @@ p{margin:0}
 .verdict__icon{font-size:1.4rem}
 .verdict__msg{margin-top:7px;font-size:1rem;opacity:.85}
 .answer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
-@media (max-width:900px){.workbench{grid-template-columns:1fr}.step--controls{position:static}}
+@media (max-width:900px){
+  .workbench{grid-template-columns:1fr}
+  .step--controls{position:static}
+  .answer{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media (max-width:700px){.answer{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:560px){
   .wrap{padding-inline:12px;padding-top:12px;padding-bottom:20px}
@@ -327,14 +331,14 @@ tbody tr[data-now=true]{background:var(--brand-soft)}
   <div class="step__head"><span class="step__num">3</span><h2 class="step__title" data-i18n="step3.title"></h2></div>
   <p class="step__sub" data-i18n="step3.sub"></p>
 
-  <div class="ruler" role="img" id="ruler" data-i18n-aria="a11y.ruler">
-    <div class="ruler__dof" id="rDof"></div>
-    <div class="ruler__target" id="rTarget" data-drag="range"></div>
+  <div class="ruler" role="group" id="ruler" data-i18n-aria="a11y.ruler">
+    <div class="ruler__dof" id="rDof" aria-hidden="true"></div>
+    <div class="ruler__target" id="rTarget" data-drag="range" aria-hidden="true"></div>
     <div class="ruler__handle" id="rNearHandle" data-drag="near" role="slider" tabindex="0"></div>
     <div class="ruler__handle" id="rFarHandle" data-drag="far" role="slider" tabindex="0"></div>
-    <div class="ruler__tlabel" id="rLabel"></div>
+    <div class="ruler__tlabel" id="rLabel" aria-hidden="true"></div>
     <div class="ruler__focus" id="rFocus" data-drag="focus" role="slider" tabindex="0"></div>
-    <div class="ruler__ticks" id="rTicks"></div>
+    <div class="ruler__ticks" id="rTicks" aria-hidden="true"></div>
   </div>
   <div class="key">
     <span><i style="background:#22c55e4d;border:1px solid var(--ok-line)"></i><span data-i18n="key.dof"></span></span>
@@ -442,7 +446,7 @@ const MESSAGES={
  "verdict.okSafe":"想更保險可以再縮一級光圈。","verdict.okDiff":"不過光圈已縮過頭，畫面整體銳利度會下降。",
  "verdict.noFlag":"這組設定拍不到","verdict.noFeasible":"照上面兩個數字調整就能涵蓋 {near}–{far}。",
  "verdict.noImpossible":"這顆鏡頭在這個距離拍不出這麼深的景深，建議換更廣的焦距或退後拍攝。",
- "verdict.badFlag":"距離填反了","verdict.badMsg":"最遠距離要比最近距離大。",
+ "verdict.badFlag":"距離設定無效","verdict.badMsg":"最遠距離要比最近距離大。","verdict.focusInvalid":"目前對焦距離短於鏡頭焦距，請將對焦距離往遠處調整。",
  "btn.apply":"一鍵套用這組設定","btn.link":"複製連結","btn.linkDone":"已複製 ✓",
  "btn.linkFail":"請手動複製網址","btn.reset":"重來",
  "step1.title":"你要拍多遠到多遠？","step1.sub":"從最近的主體到最遠的主體，這段距離內都要清楚。",
@@ -454,7 +458,7 @@ const MESSAGES={
  "field.aperture":"光圈","field.shutter":"快門","field.focusDist":"對焦距離",
  "field.sensorSize":"感光元件尺寸（mm）","field.mp":"有效像素（MP）",
  "field.coc":"容許模糊圈（mm）","field.customFocal":"自訂焦距（mm）",
- "hint.scenarios":"點一下快速帶入","hint.needDof":"需要 {v} 的景深","hint.badRange":"最遠要大於最近",
+ "hint.scenarios":"點一下快速帶入","hint.needDof":"需要 {v} 的景深","hint.badRange":"最遠要大於最近","hint.nearTooClose":"最近距離必須大於鏡頭焦距。",
  "hint.crop":"裁切係數約 {v}×","hint.customSize":"自訂尺寸","hint.equiv":"等效 {e} mm 視角",
  "hint.equivSnap":"等效 {e} mm｜理想 {i} mm，已選最接近的 {c} mm",
  "hint.framingFov":"換片幅會自動換成最接近的焦距，維持相同構圖",
@@ -511,7 +515,7 @@ const MESSAGES={
  "verdict.okSafe":"想更保险可以再缩一级光圈。","verdict.okDiff":"不过光圈已缩过头，画面整体锐度会下降。",
  "verdict.noFlag":"这组设置拍不到","verdict.noFeasible":"照上面两个数字调整就能涵盖 {near}–{far}。",
  "verdict.noImpossible":"这颗镜头在这个距离拍不出这么深的景深，建议换更广的焦距或退后拍摄。",
- "verdict.badFlag":"距离填反了","verdict.badMsg":"最远距离要比最近距离大。",
+ "verdict.badFlag":"距离设置无效","verdict.badMsg":"最远距离要比最近距离大。","verdict.focusInvalid":"当前对焦距离短于镜头焦距，请将对焦距离调远。",
  "btn.apply":"一键套用这组设置","btn.link":"复制链接","btn.linkDone":"已复制 ✓",
  "btn.linkFail":"请手动复制网址","btn.reset":"重来",
  "step1.title":"你要拍多远到多远？","step1.sub":"从最近的主体到最远的主体，这段距离内都要清晰。",
@@ -523,7 +527,7 @@ const MESSAGES={
  "field.aperture":"光圈","field.shutter":"快门","field.focusDist":"对焦距离",
  "field.sensorSize":"传感器尺寸（mm）","field.mp":"有效像素（MP）",
  "field.coc":"弥散圆直径（mm）","field.customFocal":"自定焦距（mm）",
- "hint.scenarios":"点一下快速带入","hint.needDof":"需要 {v} 的景深","hint.badRange":"最远要大于最近",
+ "hint.scenarios":"点一下快速带入","hint.needDof":"需要 {v} 的景深","hint.badRange":"最远要大于最近","hint.nearTooClose":"最近距离必须大于镜头焦距。",
  "hint.crop":"裁切系数约 {v}×","hint.customSize":"自定尺寸","hint.equiv":"等效 {e} mm 视角",
  "hint.equivSnap":"等效 {e} mm｜理想 {i} mm，已选最接近的 {c} mm",
  "hint.framingFov":"换画幅会自动换成最接近的焦距，保持相同构图",
@@ -580,7 +584,7 @@ const MESSAGES={
  "verdict.okSafe":"Stop down one more for extra safety margin.","verdict.okDiff":"But you have stopped down too far — overall sharpness will drop.",
  "verdict.noFlag":"This setup won't work","verdict.noFeasible":"Use the two numbers above and {near}–{far} will be covered.",
  "verdict.noImpossible":"This lens can't deliver that much depth at this distance. Try a wider focal length or step back.",
- "verdict.badFlag":"Range is reversed","verdict.badMsg":"The far distance must be greater than the near distance.",
+ "verdict.badFlag":"Invalid distance settings","verdict.badMsg":"The far distance must be greater than the near distance.","verdict.focusInvalid":"The focus distance is shorter than the lens focal length. Move focus farther away.",
  "btn.apply":"Apply these settings","btn.link":"Copy link","btn.linkDone":"Copied ✓",
  "btn.linkFail":"Copy the URL manually","btn.reset":"Start over",
  "step1.title":"What range needs to be sharp?","step1.sub":"From the nearest subject to the farthest — everything in between must be in focus.",
@@ -592,7 +596,7 @@ const MESSAGES={
  "field.aperture":"Aperture","field.shutter":"Shutter","field.focusDist":"Focus distance",
  "field.sensorSize":"Sensor size (mm)","field.mp":"Resolution (MP)",
  "field.coc":"Circle of confusion (mm)","field.customFocal":"Custom focal length (mm)",
- "hint.scenarios":"Tap to fill in","hint.needDof":"Needs {v} of depth","hint.badRange":"Far must exceed near",
+ "hint.scenarios":"Tap to fill in","hint.needDof":"Needs {v} of depth","hint.badRange":"Far must exceed near","hint.nearTooClose":"The near distance must be greater than the lens focal length.",
  "hint.crop":"Crop factor approx. {v}×","hint.customSize":"Custom size","hint.equiv":"{e} mm equivalent",
  "hint.equivSnap":"{e} mm equiv · ideal {i} mm, snapped to {c} mm",
  "hint.framingFov":"Changing format snaps to the closest focal length, keeping framing",
@@ -649,7 +653,7 @@ const MESSAGES={
  "verdict.okSafe":"念のため、あと1段絞ると安心です。","verdict.okDiff":"ただし絞りすぎで、全体の解像感が落ちます。",
  "verdict.noFlag":"この設定では撮れません","verdict.noFeasible":"上の2つの数値に合わせれば {near}〜{far} をカバーできます。",
  "verdict.noImpossible":"このレンズではこの距離でそこまで深い被写界深度は得られません。広角に変えるか、下がって撮影してください。",
- "verdict.badFlag":"距離が逆です","verdict.badMsg":"奥の距離は手前より大きくしてください。",
+ "verdict.badFlag":"距離設定が無効です","verdict.badMsg":"奥の距離は手前より大きくしてください。","verdict.focusInvalid":"現在のピント距離は焦点距離より短いです。ピント距離を遠くにしてください。",
  "btn.apply":"この設定を適用","btn.link":"リンクをコピー","btn.linkDone":"コピーしました ✓",
  "btn.linkFail":"URLを手動でコピーしてください","btn.reset":"やり直す",
  "step1.title":"どこからどこまで撮りますか？","step1.sub":"一番手前の被写体から一番奥まで、その範囲すべてをシャープにします。",
@@ -661,7 +665,7 @@ const MESSAGES={
  "field.aperture":"絞り","field.shutter":"シャッター","field.focusDist":"ピント距離",
  "field.sensorSize":"センサー寸法（mm）","field.mp":"有効画素数（MP）",
  "field.coc":"許容錯乱円（mm）","field.customFocal":"焦点距離を指定（mm）",
- "hint.scenarios":"タップで入力","hint.needDof":"{v} の深度が必要","hint.badRange":"奥は手前より大きく",
+ "hint.scenarios":"タップで入力","hint.needDof":"{v} の深度が必要","hint.badRange":"奥は手前より大きく","hint.nearTooClose":"手前の距離はレンズの焦点距離より大きくしてください。",
  "hint.crop":"クロップ係数 約 {v}×","hint.customSize":"カスタム寸法","hint.equiv":"{e} mm 相当の画角",
  "hint.equivSnap":"{e} mm 相当｜理想 {i} mm、最も近い {c} mm を選択",
  "hint.framingFov":"サイズ変更時に最も近い焦点距離へ自動調整し、画角を維持します",
@@ -921,6 +925,10 @@ function derive(d){
   d.drift+Exp.stops(d.stop,recStop),d.iso,d.shutter,d.compensate
  );
  const hh=Exp.handheld(d.focal,O.crop(d.sw,d.sh));
+ const nearValid=tn>d.focal;
+ const rangeOrderValid=tf>tn;
+ const focusValid=s>d.focal;
+ const valid=nearValid&&(d.farInfinity||rangeOrderValid);
  return{pitch,coc,lim,s,tn,tf,reqN,
   optF,
   snap:recStop,
@@ -930,9 +938,9 @@ function derive(d){
   equiv:d.focal*O.crop(d.sw,d.sh),
   handheld:hh,
   tooSlow:d.shutter>hh*1.05,
-  covered:lim.near<=tn&&(d.farInfinity?!Number.isFinite(lim.far):lim.far>=tf),
+  covered:valid&&focusValid&&lim.near<=tn&&(d.farInfinity?!Number.isFinite(lim.far):lim.far>=tf),
   diffracted:d.stop>O.diffract(coc),
-  valid:d.farInfinity?tn>d.focal:tf>tn,
+  nearValid,rangeOrderValid,focusValid,valid,
   feasible};
 }
 
@@ -1002,7 +1010,7 @@ const V={
   const topM=Math.max(60,Math.ceil(
    d.farInfinity?Math.max(d.near*4,d.focus*1.5):Math.max(d.far*1.5,d.focus*1.3)
   ));
-  const r=$("fdRange"), focusMin=.5;
+  const r=$("fdRange"), focusMin=Math.max(.5,d.focal/1000+.01);
   r.min=0; r.max=1000; r.step=1;
   r.value=Math.round(DistanceScale.pos(Math.max(focusMin,d.focus),topM)*1000);
   r.setAttribute("aria-valuemin",focusMin);
@@ -1024,7 +1032,7 @@ const V={
   if(!v.valid){
    box.dataset.ok="false"; $("vIcon").textContent="!";
    $("vFlag").textContent=t("verdict.badFlag");
-   $("vMsg").textContent=t("verdict.badMsg");
+   $("vMsg").textContent=t(v.nearValid?"verdict.badMsg":"hint.nearTooClose");
    $("aFocus").textContent="—"; $("aHyper").textContent="—"; $("aStop").textContent="—"; $("aExp").textContent="—";
    $("aFocusNote").textContent=""; $("aHyperNote").textContent=""; $("aStopNote").textContent=""; $("aExpNote").textContent="";
    $("btnApply").disabled=true; return;
@@ -1050,13 +1058,15 @@ const V={
   $("vFlag").textContent=t(v.covered?"verdict.okFlag":"verdict.noFlag");
   $("vMsg").textContent=v.covered
    ? t("verdict.okMsg",{near,far})+t(v.diffracted?"verdict.okDiff":"verdict.okSafe")
-   : (v.feasible?t("verdict.noFeasible",{near,far}):t("verdict.noImpossible"));
+   : (!v.focusValid?t("verdict.focusInvalid")
+     :v.feasible?t("verdict.noFeasible",{near,far}):t("verdict.noImpossible"));
  },
 
  ruler(v){
   const targetFar=Number.isFinite(v.tf)?v.tf:Math.max(v.tn*4,v.s*1.8);
-  const cap=Math.max(500,targetFar*1.35,Number.isFinite(v.lim.far)?v.lim.far*1.08:targetFar*1.9,v.s*1.3);
-  const capM=cap/1000;
+  const naturalCap=Math.max(500,targetFar*1.35,Number.isFinite(v.lim.far)?v.lim.far*1.08:targetFar*1.9,v.s*1.3);
+  const capM=RulerDrag.active?.capM??naturalCap/1000;
+  const cap=capM*1000;
   const p=x=>Math.max(0,Math.min(100,DistanceScale.pos(x/1000,capM)*100));
   const end=p(Number.isFinite(v.lim.far)?v.lim.far:cap);
   Object.assign($("rDof").style,{left:p(v.lim.near)+"%",width:(end-p(v.lim.near))+"%"});
@@ -1071,6 +1081,7 @@ const V={
   for(const [id,val] of [["rFocus",v.s/1000],["rNearHandle",v.tn/1000],["rFarHandle",Number.isFinite(v.tf)?v.tf/1000:ariaMax]]){
    const el=$(id);el.setAttribute("aria-valuemin","0.1");el.setAttribute("aria-valuemax",ariaMax.toFixed(1));
    el.setAttribute("aria-valuenow",val.toFixed(2));
+   el.setAttribute("aria-valuetext",U.disp(val*1000));
   }
   V.rulerScale={capMm:cap,capM};
   $("rTicks").replaceChildren(...DistanceScale.ticks(capM,!Number.isFinite(v.tf)).map(tick=>{
@@ -1103,11 +1114,13 @@ const V={
     {v:Exp.label(d.shutter),s:hh});
   $("shHint").className="f__hint"+(v.tooSlow?" f__hint--warn":"");
 
-  $("fdHint").textContent=v.covered?t("hint.focusOk"):t("hint.focusMove",{v:U.disp(v.optF)});
-  $("rangeHint").textContent=v.valid
-   ? t("hint.needDof",{v:U.disp(v.tf-v.tn)}) : t("hint.badRange");
+  $("fdHint").textContent=!v.valid?""
+   :v.covered?t("hint.focusOk"):t("hint.focusMove",{v:U.disp(v.optF)});
+  $("rangeHint").textContent=!v.nearValid?t("hint.nearTooClose")
+   :!v.rangeOrderValid?t("hint.badRange"):t("hint.needDof",{v:U.disp(v.tf-v.tn)});
   $("rangeHint").className="f__hint"+(v.valid?"":" f__hint--warn");
-  $("far").setAttribute("aria-invalid",String(!v.valid));
+  $("near").setAttribute("aria-invalid",String(!v.nearValid));
+  $("far").setAttribute("aria-invalid",String(!d.farInfinity&&!v.rangeOrderValid));
   $("mpHint").textContent=t("hint.pitch",{v:U.n(v.pitch*1000,2)});
   $("cocHint").textContent=t(d.quality==="pixel"?"hint.cocPixel":"hint.cocAuto");
  },
@@ -1115,7 +1128,7 @@ const V={
  table(d,v){
   $("tbody").replaceChildren(...STOPS.map(N=>{
    const l=O.limits(d.focal,N,v.coc,v.s);
-   const good=O.covers(l,v.tn,v.tf), df=N>v.diffN;
+   const good=v.valid&&v.focusValid&&O.covers(l,v.tn,v.tf), df=N>v.diffN;
    const tr=document.createElement("tr");
    tr.dataset.now=String(N===F.snap(d.stop));
    tr.innerHTML=`<td>f/${U.n(N,1)}</td><td>${U.raw(l.near)}</td><td>${U.raw(l.far)}</td>`+
@@ -1261,7 +1274,8 @@ $("compensate").onchange = e=>S.set({compensate:e.target.value});
 $("fdRange").oninput=e=>{
  const scale=V.focusScale??{minM:.5,maxM:60};
  const ratio=+e.target.value/1000;
- S.set({focus:Math.max(scale.minM,DistanceScale.value(ratio,scale.maxM))});
+ S.set({focus:Math.max(scale.minM,S.d.focal/1000+.01,
+  DistanceScale.value(ratio,scale.maxM))});
 };
 
 /* Direct manipulation for the DoF ruler: focus, near edge, far edge, or whole range. */
@@ -1271,7 +1285,7 @@ const RulerDrag={
  valueFromEvent(e){
   const rect=$("ruler").getBoundingClientRect();
   const ratio=Math.max(0,Math.min(1,(e.clientX-rect.left)/rect.width));
-  return DistanceScale.value(ratio,V.rulerScale?.capM??1);
+  return DistanceScale.value(ratio,RulerDrag.active?.capM??V.rulerScale?.capM??1);
  },
  snap(v){
   const step=S.d.unit==="ft"?U.in(.1):.1;
@@ -1282,8 +1296,8 @@ const RulerDrag={
   if(!mode||!V.rulerScale)return;
   e.preventDefault();
   const d=S.d;
-  RulerDrag.active={mode,pointerId:e.pointerId,startX:RulerDrag.valueFromEvent(e),
-   near:d.near,far:d.far,focus:d.focus,farInfinity:d.farInfinity};
+  RulerDrag.active={mode,pointerId:e.pointerId,capM:V.rulerScale.capM,
+   startX:RulerDrag.valueFromEvent(e),near:d.near,far:d.far,focus:d.focus,farInfinity:d.farInfinity};
   $("ruler").dataset.dragging="true";$("ruler").dataset.dragMode=mode;
   $("ruler").setPointerCapture(e.pointerId);
  },
@@ -1291,18 +1305,21 @@ const RulerDrag={
   const a=RulerDrag.active;if(!a||a.pointerId!==e.pointerId)return;
   e.preventDefault();
   const x=RulerDrag.snap(RulerDrag.valueFromEvent(e)),gap=RulerDrag.minGap;
-  if(a.mode==="focus")S.set({focus:x});
+  if(a.mode==="focus")S.set({focus:Math.max(.1,S.d.focal/1000+.01,x)});
   else if(a.mode==="near"){
-   const max=a.farInfinity?Math.max(gap,a.focus*4):Math.max(gap,S.d.far-gap);
-   S.set({near:Math.min(x,max)});
+   const max=Math.min(a.farInfinity?a.capM:S.d.far-gap,a.capM);
+   S.set({near:Math.max(.1,Math.min(x,max))});
   }else if(a.mode==="far"){
-   S.set({far:Math.max(x,S.d.near+gap),farInfinity:false});
+   S.set({far:Math.min(a.capM,Math.max(x,S.d.near+gap)),farInfinity:false});
   }else if(a.mode==="range"){
-   const delta=x-a.startX;
+   let delta=x-a.startX;
    if(a.farInfinity){
-    S.set({near:Math.max(.1,a.near+delta),focus:Math.max(.1,a.focus+delta)});
+    delta=Math.max(.1-a.near,Math.min(delta,a.capM-a.near));
+     S.set({near:Math.max(.1,a.near+delta),
+      focus:Math.max(.1,S.d.focal/1000+.01,a.focus+delta)});
    }else{
     const width=a.far-a.near;
+    delta=Math.max(.1-a.near,Math.min(delta,a.capM-a.far));
     const near=Math.max(.1,a.near+delta);
     S.set({near,far:near+width});
    }
@@ -1312,13 +1329,14 @@ const RulerDrag={
   if(!RulerDrag.active||RulerDrag.active.pointerId!==e.pointerId)return;
   RulerDrag.active=null;delete $("ruler").dataset.dragging;delete $("ruler").dataset.dragMode;
   if($("ruler").hasPointerCapture(e.pointerId))$("ruler").releasePointerCapture(e.pointerId);
+  V.render(S.d);
  },
  key(e){
   const mode=e.target.dataset.drag;if(!mode||![/ArrowLeft/,/ArrowRight/].some(r=>r.test(e.key)))return;
   e.preventDefault();
   const dir=e.key==="ArrowRight"?1:-1;
   const step=(e.shiftKey?1:.1)*dir,d=S.d,gap=RulerDrag.minGap;
-  if(mode==="focus")S.set({focus:Math.max(.1,d.focus+step)});
+  if(mode==="focus")S.set({focus:Math.max(.1,d.focal/1000+.01,d.focus+step)});
   else if(mode==="near")S.set({near:Math.max(.1,Math.min(d.near+step,d.farInfinity?d.near+step:d.far-gap))});
   else if(mode==="far")S.set({far:Math.max(d.near+gap,d.far+step),farInfinity:false});
  }
@@ -1335,7 +1353,7 @@ $("lang").onchange=e=>{I18n.set(e.target.value);V.localise(S.d);V.render(S.d)};
 $("btnApply").onclick=()=>{
  const d=S.d, next=V.last.feasible?V.last.snap:STOPS.at(-1);
  const r=Exp.compensate(d.drift+Exp.stops(d.stop,next),d.iso,d.shutter,d.compensate);
- S.set({focus:+(V.last.optF/1000).toFixed(2),stop:next,
+ S.set({focus:Math.max(d.focal/1000+.01,+(V.last.optF/1000).toFixed(2)),stop:next,
         iso:r.iso,shutter:r.shutter,drift:r.drift});
 };
 $("btnReset").onclick=()=>{Store.clear();S.reset()};
