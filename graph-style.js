@@ -1,4 +1,4 @@
-// graph-style.js — BlastRadius 共用 cytoscape 基礎節點樣式(單一來源)。
+// graph-style.js — Topocide 共用 cytoscape 基礎節點樣式(單一來源)。
 // index.html(設計權威)與 edit.html 皆 import baseGraphStyle()。
 // 僅含「節點基礎外觀」(router / pseudonode);邊樣式、role/op 狀態樣式、編輯器樣式各頁自留為 overlay。
 // 用法:cytoscape({ style: [ ...baseGraphStyle(), ...頁面 edge / role / op 樣式 ] })

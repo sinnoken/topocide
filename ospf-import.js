@@ -1,9 +1,9 @@
 // ════════════════════════════════════════════════════════════════════════
 // Shared OSPF LSDB importer — SINGLE SOURCE used by both edit.html (browser)
-// and working/ospf_to_topology.mjs (Node). PURE: no DOM, no fs.
+// and pipeline/ospf_to_topology.mjs (Node). PURE: no DOM, no fs.
 // parseOspfLsdb(lsdbText, ridMapText?) → { nodes, edges, pnNodes, stats }
 //   • Cisco `show ip ospf database router / network` 輸出。
-//   • Model B:2 成員 transit /30 收斂成 p2p(cost/costRev=兩端 metric);≥3 成員保留 pseudonode + transit 邊。
+//   • Model B:2 成員 transit(不論遮罩長度)收斂成 p2p(cost/costRev=兩端 metric);≥3 成員保留 pseudonode + transit 邊。
 //   • RID↔hostname 表(選填)→ 短 id「城市3碼+序號」、label=hostname、city/country;無對應退回 RID-based id。
 //   • 解析靠「LSA 欄位角色」區分 RID 與介面 IP(兩者都長得像 IP)。capacity 無從得知 → placeholder。
 // ════════════════════════════════════════════════════════════════════════

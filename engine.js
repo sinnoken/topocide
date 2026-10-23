@@ -655,7 +655,7 @@ export function computeN1WorstCase(topo) {
 // 只動 router→PN 的 e.cost,egress 由 buildAdjacency 固定 0)。
 // 純函式,不碰 DOM / Cytoscape;評估壅塞重用 §6.2b allPairsTraffic(ECMP 等分、單向峰值,與本檔一致)。
 
-// §15.1 Fortz-Thorup 分段凸懲罰 ψ(連續分段線性),回傳 cap·ψ(load/cap)。
+// §15.1 目標函數 — Fortz-Thorup 分段凸懲罰 ψ(連續分段線性),回傳 cap·ψ(load/cap)。
 // 斜率 1→3→10→70→500→5000,膝點 1/3·2/3·9/10·1·11/10;cap 加權讓大管的超載權重更高。
 export function ftLinkPenalty(load, cap) {
   if (!(cap > 0) || !isFinite(cap)) return 0;
@@ -671,7 +671,7 @@ export function ftLinkPenalty(load, cap) {
   return cap * (acc + sl[5] * (u - prev));
 }
 
-// §15.2 給「已套權重的 topo」評估壅塞。MLU / 懲罰計入「所有有容量的邊」(p2p + transit)。
+// §15.1 目標函數 — 給「已套權重的 topo」評估壅塞。MLU / 懲罰計入「所有有容量的邊」(p2p + transit)。
 // 與 C4 邊流量視圖同一組邊 → 兩者定義一致。transit 段(Router→Pseudo)的壅塞是真實的,必須讓
 // 優化器看見(否則會壓低 p2p 卻盲於更糟的 LAN 段、過度宣稱成績)。預設只調 p2p 權重時,靠 p2p
 // 重繞把 LAN ingress 在掛載的多台 router 間重新分配;選項 B(includeTransit)則可直接調其介面成本。
@@ -694,7 +694,7 @@ export function evalCongestion(topoW, demand, failedEdges = new Set(), failedNod
   return { mlu, sumU2, sumPhi, util, lostDemand: res.lostDemand };
 }
 
-// §15.3 套上權重,回 topo 淺拷貝,不 mutate 原 topo。
+// §15.5 函式 — 套上權重,回 topo 淺拷貝,不 mutate 原 topo。
 // weights 的 key 是「權重變數」:`eid` = 去程 / 對稱;`eid|rev` = 回程(僅不對稱邊才有)。
 //   p2p 對稱(只有 eid 變數)        → cost = costRev = w(維持對稱)
 //   p2p 不對稱(eid + eid|rev 變數)  → cost = 去程變數,costRev = 回程變數(各自獨立)
@@ -717,7 +717,7 @@ export function applyWeights(topo, weights) {
   return { ...topo, edges };
 }
 
-// §15.4 由紅線生成每條可動邊的整數權重界 [lo,hi]。
+// §15.2 硬約束 — 由紅線生成每條可動邊的整數權重界 [lo,hi]。
 //   rttFloor       : Map<edgeId, number>  RTT 推算的成本下限(caller 用其公式算好傳入,engine 不綁光纖常數)
 //   vip            : Set<edgeId>           不能升 → hi=current
 //   protectedSet   : Set<edgeId>           不能降 → lo=current
@@ -782,7 +782,7 @@ function mulberry32(seed) {
   };
 }
 
-// §15.5 Tabu Search 驅動。回 { weights, mlu, sumU2, sumPhi, util, feasible, targetMet,
+// §15.3 Tabu Search 驅動。回 { weights, mlu, sumU2, sumPhi, util, feasible, targetMet,
 //   target, bottleneck, binding, frozen, history, iterations }。
 export function optimizeWeights(topo, demand, bounds, opts = {}) {
   const {
@@ -937,7 +937,7 @@ export function optimizeWeights(topo, demand, bounds, opts = {}) {
   };
 }
 
-// §16 — PATH DIVERSITY (Pairwise Edge Connectivity)
+// §4.5 — PATH DIVERSITY (Pairwise Edge Connectivity)
 // ─────────────────────────────────────────────────────────────────────────────
 // Counts the number of edge-disjoint paths between two nodes using
 // Edmonds-Karp (BFS-based max-flow). By Menger's theorem this equals
@@ -1015,14 +1015,16 @@ export function pairwiseEdgeConnectivity(edgeList, routerIds) {
   return result;  // Map<"s|t", k>  k = edge-disjoint path count
 }
 
-// §17 — N-1 BANDWIDTH SURVIVABILITY
+// §4.6 — N-1 BANDWIDTH SURVIVABILITY
 // ─────────────────────────────────────────────────────────────────────────────
 // For each router pair (src, dst):
-//   1. Find the primary shortest path and its min-capacity bottleneck
-//   2. For each edge on that path, remove it and find the surviving path's
-//      min-capacity bottleneck (0 if unreachable)
+//   1. Take the union of all ECMP shortest-path edges (the primary DAG) and its
+//      min-capacity bottleneck (any edge with capacity > 0, p2p or transit)
+//   2. For each edge on that DAG, remove it and find the surviving DAG's
+//      min-capacity bottleneck (0 if unreachable or no capacity data)
 //   3. worst-case survivability = min across all N-1 scenarios
-//   4. rate = worst-case / primary min-capacity × 100  (capped at 200)
+//   4. rate = ceil(worst-case / primary min-capacity × 100)  (uncapped)
+//   Computed for i<j in routerIds order and mirrored.
 //
 // edges: full topology edge list (with capacity field)
 // routerIds: array of router node ids to compute all-pairs for
@@ -1048,7 +1050,7 @@ export function n1BandwidthSurvivability(edges, routerIds) {
     }
     return out;
   };
-  // 一組邊裡的最小容量(只算有容量的 p2p 邊);全無容量回 null。
+  // 一組邊裡的最小容量(只算 capacity>0 的邊,p2p 與 transit 皆計);全無容量回 null。
   const minCapOf = (edgeSet) => {
     let m = Infinity;
     for (const id of edgeSet) { const c = capOf.get(id); if (c != null && c < m) m = c; }

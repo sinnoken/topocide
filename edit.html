@@ -195,21 +195,21 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
     <!-- 共用群組:所有 tab 都顯示,位置固定在左側 -->
     <button class="btn" data-g="io"  id="btnLoadAll"  title="從同目錄 fetch topology / demand / srlg / rtt.js 全部載入">⤓ 載入全部</button>
     <button class="btn" data-g="io"  id="btnExportAll" title="將 topology / demand / srlg / rtt.js 全部下載到本機">⇩ 匯出全部</button>
-    <button class="btn" data-g="io"  id="btnExportImage" title="匯出拓樸圖片（PNG 2x）">💾</button>
-    <button class="btn" data-g="io"  id="btnSyncRemote" title="將目前資料同步到雲端（CF Workers KV）">☁️</button>
+    <button class="btn" data-g="io"  id="btnExportImage" title="匯出拓樸圖片（PNG，完整畫布）">💾</button>
+    <button class="btn" data-g="io"  id="btnSyncRemote" title="將目前資料同步到雲端（CF Workers + R2）">☁️</button>
     <button class="btn" data-g="cur" id="btnLoadLocal" title="從同目錄 fetch 當前分頁對應的 .js 載入">⤓ 載入</button>
     <button class="btn" data-g="cur" id="btnImport"    title="貼上或選取檔案,將 JS 資料載入當前分頁">⇪ 匯入</button>
     <button class="btn" data-g="cur" id="btnExport"    title="將當前分頁的資料下載為 .js 檔">⇩ 匯出本檔</button>
     <button class="btn" data-g="hist" id="btnUndo" title="復原上一步操作 (Ctrl+Z)" disabled>↶ 復原</button>
     <button class="btn" data-g="hist" id="btnRedo" title="重做已復原的操作 (Ctrl+Shift+Z)" disabled>↷ 重做</button>
-    <button class="btn" data-g="check" id="btnValidate" title="檢查連通性、CIDR 格式、SRLG 參照是否合法">✔ 驗證</button>
+    <button class="btn" data-g="check" id="btnValidate" title="檢查連通性、每台 router 相鄰節點數、CIDR 格式、SRLG 參照">✔ 驗證</button>
     <!-- topo 專屬:非 Topology tab 時從右側消失,不影響左側共用按鈕位置 -->
     <button class="btn" data-g="file" id="btnImportOspf" title="貼上 show ip ospf database router/network 輸出，自動解析建出 topology 骨架">⇪ 匯入 OSPF</button>
-    <button class="btn" data-g="edit" id="btnAddRouter" title="在畫布中央新增一個 Router 節點">＋ Router</button>
-    <button class="btn" data-g="edit" id="btnAddPN"     title="在畫布中央新增一個 Pseudo-node（交換式網段抽象）">＋ Pseudonode</button>
+    <button class="btn" data-g="edit" id="btnAddRouter" title="新增一個 Router 節點（隨機位置，可再拖曳）">＋ Router</button>
+    <button class="btn" data-g="edit" id="btnAddPN"     title="新增一個 Pseudo-node（交換式網段抽象，隨機位置）">＋ Pseudonode</button>
     <button class="btn" data-g="edit" id="btnConnect"   title="開啟連線模式，從一個節點拖曳到另一個節點建立鏈路 (E)">🖉 連線模式 <span class="k">E</span></button>
     <button class="btn danger" data-g="edit" id="btnDelete" title="刪除目前選取的節點或鏈路 (Del)">🗑 刪除 <span class="k">Del</span></button>
-    <button class="btn" data-g="view" id="btnSnap" title="格點吸附(Metro Map grid)">⊞ Snap</button>
+    <button class="btn" data-g="view" id="btnSnap" title="拖曳時吸附到 20px 格點">⊞ Snap</button>
     <select class="btn" data-g="view" id="layoutSel" title="佈局演算法" style="padding-left:8px;padding-right:8px">
       <optgroup label="地理">
         <option value="geo-map" selected>地理座標配置</option>
@@ -300,7 +300,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
     <span><b id="stPseudo">0</b> pseudo</span>
     <span id="stMsg" style="color:var(--muted);padding:2px 7px;border-radius:4px;font-weight:500"></span>
     <div class="legend">
-      <span><i></i>p2p</span><span><i class="dash"></i>transit</span>
+      <span><i></i>p2p</span><span><i class="dash"></i>transit</span><span><i style="background:#16a34a"></i>不對稱 cost</span>
       <span class="tag" style="border-color:var(--gold);color:var(--gold)">ASBR</span>
     </div>
   </footer>
@@ -313,7 +313,7 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
       <input type="file" id="fileInput" accept=".js,.txt" style="margin-bottom:8px;color:var(--muted)">
       <div id="ospfHint" style="display:none;font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">
         貼上 <code>show ip ospf database router</code> 與 <code>show ip ospf database network</code> 的輸出（可一起貼）。
-        自動建出拓樸骨架，/30 transit 收斂為 p2p（Model B）。
+        自動建出拓樸骨架，只有 2 台 router 的 transit 網段收斂為 p2p（Model B）。
       </div>
       <textarea id="modalText" spellcheck="false" placeholder="貼上 topology.js 內容,或上方選檔…"></textarea>
       <div style="margin-top:4px;text-align:right">
@@ -340,12 +340,12 @@ input:invalid,textarea:invalid{border-color:#dc2626;background:#fef2f2}
 // 演算法重用 engine.js(SoC:演算法單一來源,UI 不重寫 BFS)。需經 http server(ESM import)。
 import { buildAdjacency, connectedComponents } from './engine.js';
 import { baseGraphStyle } from './graph-style.js';
-import { parseOspfLsdb, OSPF_PLACEHOLDER_CAP } from './ospf-import.js';   // 共用 OSPF 解析(與 working/ospf_to_topology.mjs 同源)
+import { parseOspfLsdb, OSPF_PLACEHOLDER_CAP } from './ospf-import.js';   // 共用 OSPF 解析(與 pipeline/ospf_to_topology.mjs 同源)
 import { CITY_GEO as GRAVITY_CITY_GEO, CITY_NAME } from './gravity.js';    // 城市地理資料 + 英文名稱 SSOT
 // ════════════════════════════════════════════════════════════════════════
 // Topocide Topology Editor — 自包含 Cytoscape 編輯器(zero-build)。
 // 依賴:cytoscape core + cxtmenu(右鍵)。建邊與 undo/redo 自寫,不用易碎外掛。
-// cy 為單一資料源;匯出依 schema 白名單序列化(與 working/gen.mjs 同格式)。
+// cy 為單一資料源;匯出依 schema 白名單序列化(與 pipeline/gen.mjs 同格式)。
 // ════════════════════════════════════════════════════════════════════════
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1666,8 +1666,8 @@ function validate(){
   if(badSrlg.length) di.push('SRLG 參照不存在 ×'+badSrlg.length+'('+badSrlg.slice(0,3).join(' ')+(badSrlg.length>3?'…':'')+')');
   if(iso.length){ setStatus('bad','不連通,孤立:'+iso.join(',')+(di.length?'  ·  '+di.join(' · '):'')); flash(iso,'#ef4444'); }
   else if(di.length){ setStatus('bad','資料檢查:'+di.join(' · ')); }
-  else if(deg1.length){ setStatus('warn','單點連線（斷線即孤立）：'+deg1.join(',')); flash(deg1,'#f59e0b'); }
-  else setStatus('ok','✔ 連通、每節點有 ≥2 條鏈路（具備援路徑）、資料合法');
+  else if(deg1.length){ setStatus('warn','只有 1 個相鄰節點（該鄰居或鏈路故障即孤立）：'+deg1.join(',')); flash(deg1,'#f59e0b'); }
+  else setStatus('ok','✔ 連通、每台 router 至少 2 個相鄰節點、CIDR 與 SRLG 參照合法');
 }
 function flash(ids,color){
   ids.forEach(id=>{ const n=cy.getElementById(id);
@@ -1963,7 +1963,7 @@ function loadFromOspf(text, ridMapText){
     w.classList.add('show');
   } else { w.classList.remove('show'); }
   setStatus('ok', `匯入 OSPF:${stats.routers} router / ${stats.edges} 邊`);
-  toast(`OSPF Area 0 匯入:${stats.routers} router、${stats.edges} 邊（${stats.collapsed} 由 /30 收斂、${stats.trueP2P} 真 p2p`
+  toast(`OSPF Area 0 匯入:${stats.routers} router、${stats.edges} 邊（${stats.collapsed} 由 2 成員 transit 收斂、${stats.trueP2P} 真 p2p`
     +`${stats.multiAccess?`、${stats.multiAccess} 多重存取保留 pseudonode`:''}）、${stats.asbr} ASBR;`
     +`${stats.cityMapped}/${stats.routers} 套到 hostname/城市${(U.length||X.length)?`(${U.length} RID 未對應、${X.length} 表項未用,詳見上方橫幅)`:''}。已置於格狀起點。`);
 }
@@ -2187,13 +2187,13 @@ function renderRtt(){
   markDirty();
 }
 $('rttEdgeAdd').onclick=()=>{ history.push(); R.edges.push({a:'',b:'',rtt:0,src:'model'}); renderRtt(); };
-// rttRefAdd 已移除(cityRef 唯讀,不提供 UI 編輯;匯入時保留原值,匯出時照樣輸出)
+// rttRefAdd 已移除(cityRef 唯讀,不提供 UI 編輯;匯入時保留原值,匯出時不輸出)
 
 // ── 序列化器(對齊 gen.mjs;字串單引號、rtt 浮點保 .0)────────────────────────
 const q=s=>"'"+String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
 function pf(x,nd){ let s=(+x).toFixed(nd); if(s.indexOf('.')>=0) s=s.replace(/0+$/,'').replace(/\.$/,''); if(s.indexOf('.')<0)s+='.0'; return s; }
 function exportDemand(){
-  const L=['// Demand matrix — Gbps offered between every router pair. Edited via edit2.html.','const demand = {'];
+  const L=['// Demand matrix — Gbps offered between every router pair. Edited via edit.html.','const demand = {'];
   L.push('  unit: '+q(D.unit||'Gbps')+',');
   L.push('  source: '+q(D.source||'synthetic')+',');
   L.push('  timestamp: '+q(D.timestamp||'')+',','');
@@ -2220,7 +2220,7 @@ function exportDemand(){
 }
 function exportSrlg(){
   const tc={submarine:'  // submarine — 海纜系統共用風險',conduit:'  // conduit — 共管線路 / IX fabric',site:'  // site — 機房 / 落地站 / 電力',upstream:'  // upstream — 上游 ISP 依賴'};
-  const L=['// SRLG (Shared Risk Link Group) definitions. Edited via edit2.html.','const srlg = ['];
+  const L=['// SRLG (Shared Risk Link Group) definitions. Edited via edit.html.','const srlg = ['];
   let cur=null;
   for(const g of S){
     if(g.type!==cur){ L.push(''); if(tc[g.type])L.push(tc[g.type]); cur=g.type; }
@@ -2230,7 +2230,7 @@ function exportSrlg(){
   return L.join('\n');
 }
 function exportRtt(){
-  const L=['// City-pair RTT lookup (ms). Edited via edit2.html.','const rtt = {'];
+  const L=['// City-pair RTT lookup (ms). Edited via edit.html.','const rtt = {'];
   L.push('  unit: '+q(R.unit||'ms')+',');
   L.push('  note: '+q(R.note||'')+',');
   L.push('  fiberRttPerKm: '+pf(R.fiberRttPerKm??0.01014,6)+',');
@@ -2294,7 +2294,7 @@ async function startLoad(){
   // ① 本地 localStorage（已在上方 IIFE 處理）
   if(_loadedFromDraft) return;
 
-  // ② remote（CF Workers + KV）
+  // ② remote（CF Workers + R2）
   const remoteData = await fetchRemote().catch(()=>null);
   if(remoteData?.nodes?.length){ hydrateAll(remoteData); return; }
 

@@ -1,4 +1,4 @@
-/* theme.css — BlastRadius 共用設計 token(共用單一來源)。index.html 與 edit.html 皆 <link> 本檔。
+/* theme.css — Topocide 共用設計 token(共用單一來源)。index.html 與 edit.html 皆 <link> 本檔。
    - 分頁分組色 --tab-*:兩頁共用,真單一來源(改這裡兩頁同步)。
    - header 設計 --header-*:深藍標題欄(= index 的 bg-blue-900 / text-white),供 edit 繼承。
    - 淺色基礎調色盤 --bg/--panel/--accent…:供 edit.html 套用;index.html 的對應顏色走 Tailwind 類別

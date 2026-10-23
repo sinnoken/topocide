@@ -367,7 +367,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
         <div class="legend mt-1">
           <div class="legend-item"><span class="legend-line overflow"></span><span data-i18n="ui.legend.overflow">過載 (&gt;100%)</span></div>
           <div class="legend-item"><span class="legend-line load-inc"></span><span data-i18n="ui.legend.loadInc">流量增 (失效後)</span></div>
-          <div class="legend-item"><span class="legend-line load-dec"></span><span data-i18n="ui.legend.loadDec">受影響減少 (失效後)</span></div>
+          <div class="legend-item"><span class="legend-line load-dec"></span><span data-i18n="ui.legend.loadDec">負載減少 (失效後)</span></div>
         </div>
       </details>
       <details class="mt-2">
@@ -401,7 +401,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
       <button class="tab" data-tab="asym" data-group="audit" data-i18n="ui.tab.asym" data-i18n-title="ui.tabTitle.audit" title="設計審計:基於完整拓樸,忽略手動故障標記">非對稱</button>
       <button class="tab" data-tab="heatmap" data-group="audit" data-i18n-title="ui.tabTitle.audit" title="設計審計:基於完整拓樸,忽略手動故障標記">Prefix</button>
       <div class="w-px bg-gray-300 my-1.5"></div>
-      <button class="tab" data-tab="edges" data-group="edit" data-i18n="ui.tab.edges" data-i18n-title="ui.tabTitle.edit" title="修改鏈路成本,即時重算路徑">鏈路</button>
+      <button class="tab" data-tab="edges" data-group="edit" data-i18n="ui.tab.edges" data-i18n-title="ui.tabTitle.edit" title="修改鏈路成本;切回分析分頁時重算路徑">鏈路</button>
     </div>
 
     <div class="tab-content active" id="tab-path">
@@ -439,9 +439,9 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
         <span data-i18n="c2.hintCommon">點任一格查看路徑詳情並在圖上高亮。點擊後可用 ↑↓←→ 鍵盤導覽。</span>
         <div class="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 items-center">
           <span class="text-center font-bold text-blue-800">²</span>
-          <span data-i18n="c2.legend.ecmp">= 等成本路徑數(ECMP)</span>
+          <span data-i18n="c2.legend.ecmp">= 等成本路徑數(ECMP,僅成本模式)</span>
           <span class="inline-block w-3.5 h-3.5 rounded-sm" style="background-image:repeating-linear-gradient(45deg,transparent 0 3px,rgba(124,58,237,.5) 3px 5px);border:1px solid #e5e7eb"></span>
-          <span data-i18n="c2.legend.asym">= 來回路徑非對稱(斜紋)</span>
+          <span data-i18n="c2.legend.asym">= 去回成本不同(斜紋,僅成本模式)</span>
         </div>
       </div>
       <!-- 成本模式:色票圖例 + 統計(預設隱藏)-->
@@ -470,7 +470,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
           <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t4"></span>
           <span data-i18n="c2.diversity.t4">無法到達</span>
         </div>
-        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.diversity.note">數字 = edge-disjoint paths 數。= 1 時任一鏈路斷即斷線（單點失效）。</div>
+        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.diversity.note">數字 = edge-disjoint paths 數。= 1 時存在某條鏈路一斷就斷線（單點失效）。</div>
       </div>
       <!-- 頻寬存活模式：色票圖例 + 說明 -->
       <div id="c2-bwsurvival-panel" class="hint mt-1.5" style="display:none">
@@ -484,7 +484,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
           <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t4"></span>
           <span data-i18n="c2.bwsurvival.t4">0（N-1 後斷線）</span>
         </div>
-        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.bwsurvival.note">數字 = N-1 worst-case 存活頻寬 ÷ 主路頻寬 × 100。hover 格子查看詳情。</div>
+        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.bwsurvival.note">數字 = N-1 worst-case 存活頻寬 ÷ 主路頻寬 × 100(無條件進位,可 >100)。以完整拓樸計算,不套用右鍵故障。hover 格子查看詳情。</div>
       </div>
       <!-- RTT/SLO 模式:色票圖例 + SLO 目標輸入 + 覆蓋率統計(預設顯示)-->
       <div id="c2-rtt-panel" class="hint mt-1.5">
@@ -498,7 +498,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
           <span class="inline-block w-3.5 h-3.5 rounded-sm border border-gray-300 cost-t4"></span>
           <span data-i18n="c2.rtt.t4">不可達</span>
         </div>
-        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.rttNote">RTT = geo 模型沿路徑加總(地理下限,非實測)</div>
+        <div class="mt-1.5 text-xs text-gray-500" data-i18n="c2.rttNote">RTT = 每條鏈路的 RTT(實測 / 城市參考 / 模型)沿路徑加總;沒有 RTT 資料的鏈路以 0 計</div>
         <div class="mt-1 flex items-center gap-2 flex-wrap" style="font-size:12px">
           <span data-i18n="c2.sloLabel">SLO 目標 ≤</span>
           <input id="sloTarget" type="number" min="1" step="1" value="150" class="border rounded px-1" style="width:64px"> ms
@@ -532,7 +532,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
 
     <div class="tab-content" id="tab-edges">
       <h2 class="section-h !border-0 !mt-0" data-i18n="c10.title">鏈路成本編輯</h2>
-      <div class="hint" data-i18n-html="c10.hint"><div class="mb-1.5"><b>三種設定成本的方式</b>:① 表格直接輸入 · ② 點「參考」帶入<b>延遲</b>建議值 · ③ 下方「壅塞最佳化」依<b>流量</b>自動搜尋一組。①② 照<b>延遲</b>、③ 照<b>壅塞</b>,目標不同 → 建議值可能不一樣(正常)。</div>「成本」是 OSPF 用來挑路徑的權重 — 數字越小,這條鏈路越容易被選為主要路徑。改了成本,圖上標籤會即時更新、路徑自動重算。
+      <div class="hint" data-i18n-html="c10.hint"><div class="mb-1.5"><b>三種設定成本的方式</b>:① 表格直接輸入 · ② 點「參考」帶入<b>延遲</b>建議值 · ③ 下方「壅塞最佳化」依<b>流量</b>自動搜尋一組。①② 照<b>延遲</b>、③ 照<b>壅塞</b>,目標不同 → 建議值可能不一樣(正常)。</div>「成本」是 OSPF 用來挑路徑的權重 — 數字越小,這條鏈路越容易被選為主要路徑。改了成本,圖上標籤會即時更新;路徑在切回 C1–C4 分析分頁時重算,C5–C9 需重新按執行。
         <div class="mt-1.5">兩台路由器直連的鏈路(點對點),可分開設定<b>去程</b>(A→B)和<b>回程</b>(B→A)的成本,兩個方向不一定要一樣。</div>
         <div class="mt-1.5">「參考」欄會依實際<b>來回延遲(RTT)</b>換算出一個建議成本,點一下就能帶入去/回程欄位。若目前成本和建議值差距 &gt; 1,該列<b>參考欄左緣會標上<span style="color:#d97706">琥珀色條</span></b>(建議成本數字也轉琥珀),表示這條鏈路的成本可能是人為刻意設定的(例如兩個方向故意設不同值)。</div>
         <div class="mt-1.5">換算公式:<code class="bg-gray-100 px-1 rounded font-mono text-[11px]">建議成本 = round( RTT ÷ (每公里來回延遲 × 90) )</code>,再夾在 <b>5–250</b> 之間(太短不低於 5、太長不超過 250)。目前每公里來回延遲 <span id="rtt-fiber-const" class="font-mono">—</span>,換算後約每 <span id="rtt-cost-step" class="font-mono">—</span> ms 延遲對應 1 級成本。</div>
@@ -587,7 +587,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
         <div class="mt-1.5" data-i18n-html="c6.legend">
           <span class="badge pass">通過</span>斷任一條,群組內接手
           <br><span class="badge fail">失敗</span>斷線後不可達或繞出群組
-          <br><span class="badge na">不適用</span>只有一條路徑,不適用此檢查
+          <br><span class="badge na">不適用</span>只有一條路徑,或所有路徑共用同一條出口鏈路
         </div>
       </div>
       <button class="btn-primary mt-2" id="runEcmpCheck" data-action="runEcmpCheck" data-i18n="common.scanAllPairs">掃描所有 Router pairs</button>
@@ -638,7 +638,7 @@ if(_topoKey) document.addEventListener('DOMContentLoaded', ()=>{
       <h2 class="section-h !border-0 !mt-0" data-i18n="c9.title">N-1 單點故障排行</h2>
       <div class="audit-banner" data-i18n="common.auditBanner">⚠ 設計審計:基於完整拓樸,不受手動故障標記影響</div>
       <div class="hint" data-i18n-html="c9.hint">
-        逐一模擬每個元件(每條鏈路、每台 Router)單獨故障,找出哪些連線受害最深、哪個元件故障殺傷力最大。
+        逐一模擬每個元件(每條 p2p 鏈路、每台 Router)單獨故障,找出哪些連線受害最深、哪個元件故障殺傷力最大。
         <span class="badge fail">∞</span>= 故障後不可達。
         <span class="badge backup">×N</span>= 成本變 N 倍。
         點任一列在圖上查看影響範圍。
@@ -793,7 +793,7 @@ const I18N = {
     // --- C6 ECMP ---
     'c6.title':         'ECMP 備援檢查',
     'c6.hint':          '當兩點之間有<b>多條等成本路徑</b>(ECMP)時,斷掉其中一條,流量應由同群組的其他路徑接手。本檢查逐一模擬斷線,驗證備援是否留在群組內。',
-    'c6.legend':        '<span class="badge pass">通過</span>斷任一條,群組內接手<br><span class="badge fail">失敗</span>斷線後不可達或繞出群組<br><span class="badge na">不適用</span>只有一條路徑,不適用此檢查',
+    'c6.legend':        '<span class="badge pass">通過</span>斷任一條,群組內接手<br><span class="badge fail">失敗</span>斷線後不可達或繞出群組<br><span class="badge na">不適用</span>只有一條路徑,或所有路徑共用同一條出口鏈路',
     'c6.allPass':       '所有有 ECMP 的 pair 都通過備援檢查',
     'c6.failDetailHdr': '失敗明細',
     'c6.col.pair':      '連接',
@@ -825,41 +825,37 @@ const I18N = {
     'c8.clearBtn':  '清除 Heatmap',
     // --- C2 Matrix ---
     'c2.title':         '最短路徑矩陣',
-    'c2.hint':          '所有 Router 之間的最短路徑成本一覽表,底色依成本分 4 階。點任一格查看路徑詳情並在圖上高亮。',
     'c2.hintCommon':    '點任一格查看路徑詳情並在圖上高亮。點擊後可用 ↑↓←→ 鍵盤導覽。',
     'c2.legend.t1':     '<b>≤30</b> — 區域內',
     'c2.legend.t2':     '<b>31–60</b> — 跨區域',
     'c2.legend.t3':     '<b>61–100</b> — 跨洋',
     'c2.legend.t4':     '<b>&gt;100</b> — 多段跨洋',
-    'c2.legend.ecmp':   '= 等成本路徑數(ECMP)',
-    'c2.legend.asym':   '= 來回路徑非對稱(斜紋)',
+    'c2.legend.ecmp':   '= 等成本路徑數(ECMP,僅成本模式)',
+    'c2.legend.asym':   '= 去回成本不同(斜紋,僅成本模式)',
     'c2.noPath':        (p) => `${p.src} → ${p.dst} 沒有可用路徑。`,
     'c2.failStatus':    (p) => `目前故障:${p.e} 鏈路 / ${p.n} 節點`,
-    'c2.maxCostNote':   (p) => `最大 cost = ${p.max}。色階門檻與符號說明見上方圖例。`,
     'c2.reverseDir':    (p) => `反方向 ${p.dst} → ${p.src}`,
     'c2.asymCostLabel': (p) => `cost ${p.cost} (非對稱)`,
-    'c2.mode':          '檢視',
     'c2.mode.cost':     '成本',
     'c2.mode.diversity': '路徑備援',
     'c2.mode.bwSurvival': '頻寬存活',
     'c2.mode.rtt':      'RTT / SLO',
     'c2.sloLabel':      'SLO 目標 ≤',
-    'c2.rttLegend':     '色階:綠 ≤SLO · 黃 ≤1.5×SLO · 橙 超標 · 紅 不可達。RTT = geo 模型沿路徑加總(地理下限,非實測)。',
     'c2.rtt.t1':        '≤ SLO',
     'c2.rtt.t2':        '≤ 1.5×SLO',
     'c2.rtt.t3':        '超標',
     'c2.rtt.t4':        '不可達',
-    'c2.rttNote':       'RTT = geo 模型沿路徑加總(地理下限,非實測)',
+    'c2.rttNote':       'RTT = 每條鏈路的 RTT(實測 / 城市參考 / 模型)沿路徑加總;沒有 RTT 資料的鏈路以 0 計',
     'c2.diversity.t1':   '≥ 3 條獨立路徑',
     'c2.diversity.t2':   '2 條獨立路徑',
     'c2.diversity.t3':   '1 條（無備援）',
     'c2.diversity.t4':   '無法到達',
-    'c2.diversity.note': '數字 = edge-disjoint paths 數。= 1 時任一鏈路斷即斷線（單點失效）。',
+    'c2.diversity.note': '數字 = edge-disjoint paths 數。= 1 時存在某條鏈路一斷就斷線（單點失效）。',
     'c2.bwsurvival.t1':  '≥ 100（備援頻寬充足）',
     'c2.bwsurvival.t2':  '50–99（部分保護）',
     'c2.bwsurvival.t3':  '1–49（嚴重縮水）',
     'c2.bwsurvival.t4':  '0（N-1 後斷線）',
-    'c2.bwsurvival.note':'數字 = N-1 worst-case 存活頻寬 ÷ 主路頻寬 × 100。hover 格子查看詳情。',
+    'c2.bwsurvival.note':'數字 = N-1 worst-case 存活頻寬 ÷ 主路頻寬 × 100(無條件進位,可 >100)。以完整拓樸計算,不套用右鍵故障。hover 格子查看詳情。',
     'c2.costStats':     (p) => `最大成本 ${p.max} · 不可達 ${p.unreach} 對`,
     'c2.noRtt':         '未載入 rtt.js — 無法顯示 RTT / SLO。',
     'c2.coverage':      (p) => `SLO ≤${p.t}ms 覆蓋:${p.met}/${p.total}(${p.pct}%)· 破標 ${p.bad}`,
@@ -883,7 +879,7 @@ const I18N = {
     'c1.noPrimary':    '目前沒有可分析的主路徑。',
     'c1.unbackTitle':  '主路徑逐段備援(單鏈路 N-1)',
     'c1.allBackedUp':  '任一單鏈路斷,終點仍可達',
-    'c1.unbackNote':   '僅測單一鏈路失效,判斷「斷後是否仍可達」;繞道成本可能上升,不保證等成本備援。',
+    'c1.unbackNote':   '以完整拓樸的主路計算(不套用右鍵故障)。僅測單一鏈路失效,判斷「斷後是否仍可達」;繞道成本可能上升,不保證等成本備援。',
     'c1.noPath':        (p) => `${p.src} → ${p.dst} 沒有可用路徑(可能因故障導致)。`,
     'c1.path.ecmp':     (p) => `ECMP ×${p.n} 多路徑`,
     'c1.parallelLinks': (p) => `⇉ 平行等價鏈路 ×${p.n}:${p.list}`,
@@ -909,7 +905,7 @@ const I18N = {
     'c4.reach.lostNote': (p) => `以下流量排行僅基於剩餘可達 demand。現實裡這 ${p.lost} Gbps 不會憑空消失,代表「客戶斷線」或「BGP 倒換出域」。`,
     // --- C9 N-1 ---
     'c9.title':        'N-1 單點故障排行',
-    'c9.hint':         '逐一模擬每個元件(每條鏈路、每台 Router)單獨故障,找出哪些連線受害最深、哪個元件故障殺傷力最大。<span class="badge fail">∞</span>= 故障後不可達。<span class="badge backup">×N</span>= 成本變 N 倍。點任一列在圖上查看影響範圍。',
+    'c9.hint':         '逐一模擬每個元件(每條 p2p 鏈路、每台 Router)單獨故障,找出哪些連線受害最深、哪個元件故障殺傷力最大。<span class="badge fail">∞</span>= 故障後不可達。<span class="badge backup">×N</span>= 成本變 N 倍。點任一列在圖上查看影響範圍。',
     'c9.scanBtn':      '執行 N-1 掃描',
     'c9.unreach':      '不可達',
     'c9.stat.severe':  '嚴重劣化 (×≥2)',
@@ -917,7 +913,7 @@ const I18N = {
     'c9.stat.ok':      '不受影響',
     'c9.deadliestHdr': '最致命失效 (Top 10)',
     'c9.noFailures':   '無單點失效會造成任何 pair 劣化',
-    'c9.failHint':     '點任一列模擬該失效情境 — 失效元件標紅,所有受影響 pair 的重繞路徑以橘色高亮。',
+    'c9.failHint':     '點任一列模擬該失效情境 — 失效元件標紅,所有受影響 pair 的重繞路徑以琥珀色高亮。',
     'c9.col.failure':  '失效',
     'c9.col.degraded': '劣化',
     'c9.col.maxRatio': '最大 ×',
@@ -991,7 +987,7 @@ const I18N = {
     'c5.okValue':      (p) => `${p.total} Gbps demand 全數有路可走`,
     // --- C10 Edges Editor ---
     'c10.title':       '鏈路成本編輯',
-    'c10.hint':        '<div class="mb-1.5"><b>三種設定成本的方式</b>:① 表格直接輸入 · ② 點「參考」帶入<b>延遲</b>建議值 · ③ 下方「壅塞最佳化」依<b>流量</b>自動搜尋一組。①② 照<b>延遲</b>、③ 照<b>壅塞</b>,目標不同 → 建議值可能不一樣(正常)。</div>「成本」是 OSPF 用來挑路徑的權重 — 數字越小,這條鏈路越容易被選為主要路徑。改了成本,圖上標籤會即時更新、路徑自動重算。<div class="mt-1.5">兩台路由器直連的鏈路(點對點),可分開設定<b>去程</b>(A→B)和<b>回程</b>(B→A)的成本,兩個方向不一定要一樣。</div><div class="mt-1.5">「參考」欄會依實際<b>來回延遲(RTT)</b>換算出一個建議成本,點一下就能帶入去/回程欄位。若目前成本和建議值差距 &gt; 1,該列<b>參考欄左緣會標上<span style="color:#d97706">琥珀色條</span></b>(建議成本數字也轉琥珀),表示這條鏈路的成本可能是人為刻意設定的(例如兩個方向故意設不同值)。</div><div class="mt-1.5">換算公式:<code class="bg-gray-100 px-1 rounded font-mono text-[11px]">建議成本 = round( RTT ÷ (每公里來回延遲 × 90) )</code>,再夾在 <b>5–250</b> 之間(太短不低於 5、太長不超過 250)。目前每公里來回延遲 <span id="rtt-fiber-const" class="font-mono">—</span>,換算後約每 <span id="rtt-cost-step" class="font-mono">—</span> ms 延遲對應 1 級成本。</div><div class="legend mt-1.5">建議成本背後的延遲資料有三種來源,可信度由高到低:<span class="legend-item">🟢 直測 — 直接量到的實際延遲(最準)</span><span class="legend-item">🔵 城市參考 — 查公開的「城市對城市」延遲資料庫</span><span class="legend-item">⚪ 模型估計 — 用兩地直線距離推算(最粗略)</span></div>',
+    'c10.hint':        '<div class="mb-1.5"><b>三種設定成本的方式</b>:① 表格直接輸入 · ② 點「參考」帶入<b>延遲</b>建議值 · ③ 下方「壅塞最佳化」依<b>流量</b>自動搜尋一組。①② 照<b>延遲</b>、③ 照<b>壅塞</b>,目標不同 → 建議值可能不一樣(正常)。</div>「成本」是 OSPF 用來挑路徑的權重 — 數字越小,這條鏈路越容易被選為主要路徑。改了成本,圖上標籤會即時更新;路徑在切回 C1–C4 分析分頁時重算,C5–C9 需重新按執行。<div class="mt-1.5">兩台路由器直連的鏈路(點對點),可分開設定<b>去程</b>(A→B)和<b>回程</b>(B→A)的成本,兩個方向不一定要一樣。</div><div class="mt-1.5">「參考」欄會依實際<b>來回延遲(RTT)</b>換算出一個建議成本,點一下就能帶入去/回程欄位。若目前成本和建議值差距 &gt; 1,該列<b>參考欄左緣會標上<span style="color:#d97706">琥珀色條</span></b>(建議成本數字也轉琥珀),表示這條鏈路的成本可能是人為刻意設定的(例如兩個方向故意設不同值)。</div><div class="mt-1.5">換算公式:<code class="bg-gray-100 px-1 rounded font-mono text-[11px]">建議成本 = round( RTT ÷ (每公里來回延遲 × 90) )</code>,再夾在 <b>5–250</b> 之間(太短不低於 5、太長不超過 250)。目前每公里來回延遲 <span id="rtt-fiber-const" class="font-mono">—</span>,換算後約每 <span id="rtt-cost-step" class="font-mono">—</span> ms 延遲對應 1 級成本。</div><div class="legend mt-1.5">建議成本背後的延遲資料有三種來源,可信度由高到低:<span class="legend-item">🟢 直測 — 直接量到的實際延遲(最準)</span><span class="legend-item">🔵 城市參考 — 查公開的「城市對城市」延遲資料庫</span><span class="legend-item">⚪ 模型估計 — 用兩地直線距離推算(最粗略)</span></div>',
     'c10.resetBtn':    '還原原始值',
     'c10.exportBtn':   '輸出 topology.js',
     'c10.col.ref':     '參考',
@@ -1025,7 +1021,7 @@ const I18N = {
     'c10.opt.mluAfter':    'MLU 後',
     'c10.opt.statLabel':   'profile · 迭代 · 改動 · 耗時',
     'c10.opt.tipIncluded': '已納入 transit 介面成本一併最佳化。',
-    'c10.opt.tipExcluded': '可勾選「也調 transit 介面成本(B)」直接調該段入向成本,否則只能靠 p2p 重繞分流入口。',
+    'c10.opt.tipExcluded': '可勾選「也調 transit 介面成本」直接調該段入向成本,否則只能靠 p2p 重繞分流入口。',
     'c10.opt.noRelax':     '紅線內已最佳,瓶頸為實體容量不足。',
     'c10.opt.relaxPrefix': '建議鬆綁:',
     'c10.opt.infeasibleLabel':'⚠ 約束內無解(MLU ≥ 100%)',
@@ -1055,7 +1051,6 @@ const I18N = {
     'ui.togglePseudoTitle':'Pseudo-node 是交換式網段的虛擬節點,用來表示多台 Router 共用同一個 LAN。隱藏後只顯示實體 Router。',
     'ui.clearFailed':      '清除所有故障',
     'ui.clearFailedTitle': '清除所有右鍵標記的故障鏈路與節點,回到正常拓樸。',
-    'ui.bcBanner':         '⟳ 拓樸已從編輯器更新 — 點此重新載入',
     'ui.demandProfile':    '流量情境',
     'ui.interactionHint':  '右鍵鏈路/節點 → 切換故障 · 左鍵拖曳排版',
     'ui.legend':           '圖例',
@@ -1066,7 +1061,7 @@ const I18N = {
     'ui.legend.flowFailure':'流量 / 失效圖例 ▸',
     'ui.legend.overflow':  '過載 (>100%)',
     'ui.legend.loadInc':   '流量增 (失效後)',
-    'ui.legend.loadDec':   '受影響減少 (失效後)',
+    'ui.legend.loadDec':   '負載減少 (失效後)',
     'ui.knownLimits':      '已知限制 ▸',
     'ui.limit.1':          '僅支援<b>單一路由區域</b>(Area 0),不處理跨區域的路由摘要',
     'ui.limit.2':          '外部路由查詢只做精確比對與預設路由,未實作完整的最長前綴匹配',
@@ -1081,7 +1076,7 @@ const I18N = {
     'ui.tabTitle.live':    '即時分析:反映圖上標記的故障狀態',
     'ui.tabTitle.traffic': '即時分析:依據流量矩陣計算實際負載',
     'ui.tabTitle.audit':   '設計審計:基於完整拓樸,忽略手動故障標記',
-    'ui.tabTitle.edit':    '修改鏈路成本,即時重算路徑',
+    'ui.tabTitle.edit':    '修改鏈路成本;切回分析分頁時重算路徑',
     'ui.tabSep':           '分隔',
   },
   en: {
@@ -1098,14 +1093,14 @@ const I18N = {
     // --- C6 ECMP ---
     'c6.title':         'ECMP Backup Check',
     'c6.hint':          'When two endpoints have <b>multiple equal-cost paths</b> (ECMP), cutting one means traffic should be taken over by the others in the same group. This check simulates cutting each link in turn and verifies the backup stays inside the group.',
-    'c6.legend':        '<span class="badge pass">Pass</span> any cut is absorbed within the group<br><span class="badge fail">Fail</span> unreachable after a cut, or escapes the group<br><span class="badge na">N/A</span> only one path — check not applicable',
+    'c6.legend':        '<span class="badge pass">Pass</span> any cut is absorbed within the group<br><span class="badge fail">Fail</span> unreachable after a cut, or escapes the group<br><span class="badge na">N/A</span> only one path, or all paths share one egress link',
     'c6.allPass':       'All ECMP pairs pass the backup check',
     'c6.failDetailHdr': 'Failure detail',
     'c6.col.pair':      'Pair',
     'c6.col.reason':    'Reason',
     'c6.col.status':    'Status',
     'c6.col.note':      'Note',
-    'c6.stat.breakdown': (p) => `(no ECMP ${p.noEcmp} · single-hop ${p.singleHop})`,
+    'c6.stat.breakdown': (p) => `(no ECMP ${p.noEcmp} · single egress ${p.singleHop})`,
     'c6.fullScan':       (p) => `All ${p.n} pairs scanned`,
     'c6.reason.no-ecmp':            () => 'No ECMP (single shortest path)',
     'c6.reason.single-first-hop':   () => 'Multiple paths share one egress link',
@@ -1130,41 +1125,37 @@ const I18N = {
     'c8.clearBtn':  'Clear heatmap',
     // --- C2 Matrix ---
     'c2.title':         'Shortest-path matrix',
-    'c2.hint':          'A table of shortest-path cost between all routers, shaded into 4 tiers by cost. Click any cell to see path details and highlight them on the graph.',
     'c2.hintCommon':    'Click any cell to see path details and highlight them on the graph. After clicking, use ↑↓←→ to navigate.',
     'c2.legend.t1':     '<b>≤30</b> — intra-region',
     'c2.legend.t2':     '<b>31–60</b> — inter-region',
     'c2.legend.t3':     '<b>61–100</b> — transoceanic',
     'c2.legend.t4':     '<b>&gt;100</b> — multi-hop transoceanic',
-    'c2.legend.ecmp':   '= number of equal-cost paths (ECMP)',
-    'c2.legend.asym':   '= round-trip path asymmetric (hatched)',
+    'c2.legend.ecmp':   '= number of equal-cost paths (ECMP, Cost mode only)',
+    'c2.legend.asym':   '= round-trip cost differs (hatched, Cost mode only)',
     'c2.noPath':        (p) => `No path available for ${p.src} → ${p.dst}.`,
     'c2.failStatus':    (p) => `Current failures: ${p.e} link(s) / ${p.n} node(s)`,
-    'c2.maxCostNote':   (p) => `Max cost = ${p.max}. See the legend above for tier thresholds and symbols.`,
     'c2.reverseDir':    (p) => `Reverse ${p.dst} → ${p.src}`,
     'c2.asymCostLabel': (p) => `cost ${p.cost} (asymmetric)`,
-    'c2.mode':          'View',
     'c2.mode.cost':     'Cost',
     'c2.mode.diversity': 'Path Diversity',
     'c2.mode.bwSurvival': 'BW Survivability',
     'c2.mode.rtt':      'RTT / SLO',
     'c2.sloLabel':      'SLO target ≤',
-    'c2.rttLegend':     'Shade: green ≤SLO · amber ≤1.5×SLO · orange over · red unreachable. RTT = geo model summed along the path (geographic floor, not measured).',
     'c2.rtt.t1':        '≤ SLO',
     'c2.rtt.t2':        '≤ 1.5×SLO',
     'c2.rtt.t3':        'Over',
     'c2.rtt.t4':        'Unreachable',
-    'c2.rttNote':       'RTT = geo model summed along the path (geographic floor, not measured)',
+    'c2.rttNote':       'RTT = per-link RTT (measured / city reference / model) summed along the path; links with no RTT data count as 0',
     'c2.diversity.t1':   '≥ 3 independent paths',
     'c2.diversity.t2':   '2 independent paths',
     'c2.diversity.t3':   '1 path (no backup)',
     'c2.diversity.t4':   'Unreachable',
-    'c2.diversity.note': 'Number = edge-disjoint path count. = 1 means any single link failure disconnects this pair.',
+    'c2.diversity.note': 'Number = edge-disjoint path count. = 1 means some single link failure disconnects this pair.',
     'c2.bwsurvival.t1':  '≥ 100 (backup bandwidth sufficient)',
     'c2.bwsurvival.t2':  '50–99 (partial protection)',
     'c2.bwsurvival.t3':  '1–49 (severely degraded)',
     'c2.bwsurvival.t4':  '0 (disconnected after N-1)',
-    'c2.bwsurvival.note':'Number = N-1 worst-case surviving bandwidth ÷ primary bandwidth × 100. Hover for details.',
+    'c2.bwsurvival.note':'Number = N-1 worst-case surviving bandwidth ÷ primary bandwidth × 100 (rounded up, can exceed 100). Computed on the intact topology; right-click failures are not applied. Hover for details.',
     'c2.costStats':     (p) => `Max cost ${p.max} · Unreachable ${p.unreach} pairs`,
     'c2.noRtt':         'rtt.js not loaded — RTT / SLO unavailable.',
     'c2.coverage':      (p) => `SLO ≤${p.t}ms coverage: ${p.met}/${p.total} (${p.pct}%) · over ${p.bad}`,
@@ -1188,7 +1179,7 @@ const I18N = {
     'c1.noPrimary':    'No primary path available to analyze.',
     'c1.unbackTitle':  'Per-hop backup of the primary path (single-link N-1)',
     'c1.allBackedUp':  'Any single link can fail and the destination stays reachable',
-    'c1.unbackNote':   'Tests single-link failures only, judging "still reachable after a cut"; reroute cost may rise — equal-cost backup is not guaranteed.',
+    'c1.unbackNote':   'Based on the intact topology\'s primary path (right-click failures not applied). Tests single-link failures only, judging "still reachable after a cut"; reroute cost may rise — equal-cost backup is not guaranteed.',
     'c1.noPath':        (p) => `No path available for ${p.src} → ${p.dst} (possibly due to a failure).`,
     'c1.path.ecmp':     (p) => `ECMP ×${p.n} multipath`,
     'c1.parallelLinks': (p) => `⇉ Parallel equal-cost links ×${p.n}: ${p.list}`,
@@ -1214,7 +1205,7 @@ const I18N = {
     'c4.reach.lostNote': (p) => `The ranking below is based only on remaining reachable demand. In reality this ${p.lost} Gbps does not vanish — it means "customer down" or "BGP failover out of domain".`,
     // --- C9 N-1 ---
     'c9.title':        'N-1 single-point-of-failure ranking',
-    'c9.hint':         'Simulates each component (every link, every router) failing on its own, to find which connections suffer most and which component failure is most damaging. <span class="badge fail">∞</span>= unreachable after failure. <span class="badge backup">×N</span>= cost becomes N×. Click any row to see the impact on the graph.',
+    'c9.hint':         'Simulates each component (every p2p link, every router) failing on its own, to find which connections suffer most and which component failure is most damaging. <span class="badge fail">∞</span>= unreachable after failure. <span class="badge backup">×N</span>= cost becomes N×. Click any row to see the impact on the graph.',
     'c9.scanBtn':      'Run N-1 scan',
     'c9.unreach':      'Unreachable',
     'c9.stat.severe':  'Severe degradation (×≥2)',
@@ -1222,7 +1213,7 @@ const I18N = {
     'c9.stat.ok':      'Unaffected',
     'c9.deadliestHdr': 'Deadliest failures (Top 10)',
     'c9.noFailures':   'No single-point failure degrades any pair',
-    'c9.failHint':     'Click any row to simulate that failure — the failed component turns red and every affected pair\'s reroute is highlighted in orange.',
+    'c9.failHint':     'Click any row to simulate that failure — the failed component turns red and every affected pair\'s reroute is highlighted in amber.',
     'c9.col.failure':  'Failure',
     'c9.col.degraded': 'Degraded',
     'c9.col.maxRatio': 'Max ×',
@@ -1296,7 +1287,7 @@ const I18N = {
     'c5.okValue':      (p) => `${p.total} Gbps demand all routable`,
     // --- C10 Edges Editor ---
     'c10.title':       'Edit link costs',
-    'c10.hint':        '<div class="mb-1.5"><b>Three ways to set cost</b>: ① type directly in the table · ② click "Reference" to apply the <b>latency</b>-based suggestion · ③ use "Congestion optimization" below to auto-search a set by <b>traffic</b>. ①② follow <b>latency</b>, ③ follows <b>congestion</b> — different goals → suggestions may differ (normal).</div>"Cost" is the OSPF weight used to pick paths — the smaller the number, the more likely this link is chosen as the primary path. Changing a cost updates the graph labels live and recomputes paths automatically.<div class="mt-1.5">For a directly-connected (point-to-point) link between two routers, you can set <b>forward</b> (A→B) and <b>reverse</b> (B→A) cost separately; the two directions need not match.</div><div class="mt-1.5">The "Reference" column derives a suggested cost from the actual <b>round-trip time (RTT)</b>; click it to fill the forward/reverse fields. If the current cost differs from the suggestion by &gt; 1, that row gets an <b>amber bar on the left edge of its reference cell</b> (the suggested number also turns amber), indicating the cost may have been set manually (e.g. the two directions intentionally differ).</div><div class="mt-1.5">Formula: <code class="bg-gray-100 px-1 rounded font-mono text-[11px]">suggested cost = round( RTT ÷ (round-trip latency per km × 90) )</code>, clamped to <b>5–250</b> (no lower than 5 if too short, no higher than 250 if too long). Current round-trip latency per km <span id="rtt-fiber-const" class="font-mono">—</span>; about every <span id="rtt-cost-step" class="font-mono">—</span> ms of latency maps to 1 cost level.</div><div class="legend mt-1.5">The latency behind a suggestion comes from three sources, most to least trustworthy:<span class="legend-item">🟢 Measured — actual measured latency (most accurate)</span><span class="legend-item">🔵 City reference — public city-to-city latency database</span><span class="legend-item">⚪ Model estimate — derived from straight-line distance (roughest)</span></div>',
+    'c10.hint':        '<div class="mb-1.5"><b>Three ways to set cost</b>: ① type directly in the table · ② click "Reference" to apply the <b>latency</b>-based suggestion · ③ use "Congestion optimization" below to auto-search a set by <b>traffic</b>. ①② follow <b>latency</b>, ③ follows <b>congestion</b> — different goals → suggestions may differ (normal).</div>"Cost" is the OSPF weight used to pick paths — the smaller the number, the more likely this link is chosen as the primary path. Changing a cost updates the graph labels live; paths recompute when you switch back to C1–C4, and C5–C9 need to be re-run.<div class="mt-1.5">For a directly-connected (point-to-point) link between two routers, you can set <b>forward</b> (A→B) and <b>reverse</b> (B→A) cost separately; the two directions need not match.</div><div class="mt-1.5">The "Reference" column derives a suggested cost from the actual <b>round-trip time (RTT)</b>; click it to fill the forward/reverse fields. If the current cost differs from the suggestion by &gt; 1, that row gets an <b>amber bar on the left edge of its reference cell</b> (the suggested number also turns amber), indicating the cost may have been set manually (e.g. the two directions intentionally differ).</div><div class="mt-1.5">Formula: <code class="bg-gray-100 px-1 rounded font-mono text-[11px]">suggested cost = round( RTT ÷ (round-trip latency per km × 90) )</code>, clamped to <b>5–250</b> (no lower than 5 if too short, no higher than 250 if too long). Current round-trip latency per km <span id="rtt-fiber-const" class="font-mono">—</span>; about every <span id="rtt-cost-step" class="font-mono">—</span> ms of latency maps to 1 cost level.</div><div class="legend mt-1.5">The latency behind a suggestion comes from three sources, most to least trustworthy:<span class="legend-item">🟢 Measured — actual measured latency (most accurate)</span><span class="legend-item">🔵 City reference — public city-to-city latency database</span><span class="legend-item">⚪ Model estimate — derived from straight-line distance (roughest)</span></div>',
     'c10.resetBtn':    'Restore original values',
     'c10.exportBtn':   'Export topology.js',
     'c10.col.ref':     'Reference',
@@ -1330,11 +1321,11 @@ const I18N = {
     'c10.opt.mluAfter':    'MLU after',
     'c10.opt.statLabel':   'profile · iterations · changes · time',
     'c10.opt.tipIncluded': 'Transit interface cost is included in the optimization.',
-    'c10.opt.tipExcluded': 'Check "Also adjust transit interface cost (B)" to tune that segment\'s ingress cost directly; otherwise only p2p reroutes can split the ingress.',
+    'c10.opt.tipExcluded': 'Check "Also adjust transit interface cost" to tune that segment\'s ingress cost directly; otherwise only p2p reroutes can split the ingress.',
     'c10.opt.noRelax':     'Optimal within the red lines; the bottleneck is insufficient physical capacity.',
     'c10.opt.relaxPrefix': 'Suggested relaxation: ',
     'c10.opt.infeasibleLabel':'⚠ No solution within constraints (MLU ≥ 100%)',
-    'c10.opt.feasibleNotMet': 'Feasible but below target',
+    'c10.opt.feasibleNotMet': 'Feasible but target not met',
     'c10.opt.noChange':    'Current weights are already optimal within constraints; no change needed.',
     'c10.opt.colOldNew':   'Old→New',
     'c10.opt.colUtil':     'util before→after',
@@ -1360,7 +1351,6 @@ const I18N = {
     'ui.togglePseudoTitle':'A pseudo-node is a virtual node for a switched segment, representing multiple routers sharing one LAN. Hiding shows only physical routers.',
     'ui.clearFailed':      'Clear all failures',
     'ui.clearFailedTitle': 'Clear all right-click-marked failed links and nodes, returning to the normal topology.',
-    'ui.bcBanner':         '⟳ Topology updated from editor — click to reload',
     'ui.demandProfile':    'Traffic scenario',
     'ui.interactionHint':  'Right-click link/node → toggle failure · left-drag to lay out',
     'ui.legend':           'Legend',
@@ -1371,7 +1361,7 @@ const I18N = {
     'ui.legend.flowFailure':'Traffic / failure legend ▸',
     'ui.legend.overflow':  'Overload (>100%)',
     'ui.legend.loadInc':   'Load increased (after failure)',
-    'ui.legend.loadDec':   'Affected reduced (after failure)',
+    'ui.legend.loadDec':   'Load decreased (after failure)',
     'ui.knownLimits':      'Known limitations ▸',
     'ui.limit.1':          'Supports a <b>single routing area</b> (Area 0) only; does not handle inter-area route summaries',
     'ui.limit.2':          'External-route lookup does exact match + default route only; full longest-prefix match is not implemented',
@@ -1386,7 +1376,7 @@ const I18N = {
     'ui.tabTitle.live':    'Live analysis: reflects the failure state marked on the graph',
     'ui.tabTitle.traffic': 'Live analysis: computes actual load from the traffic matrix',
     'ui.tabTitle.audit':   'Design audit: based on the full topology, ignores manual failure marks',
-    'ui.tabTitle.edit':    'Edit link costs, recompute paths live',
+    'ui.tabTitle.edit':    'Edit link costs; paths recompute when you switch back to an analysis tab',
     'ui.tabSep':           'Separator',
   },
 };
@@ -2986,7 +2976,7 @@ const C10_Edges = (() => {
   }
 
   // ── RTT 參考來源(諮詢用,非權威覆寫)──────────────────────────────────
-  // rtt.edges 已由 gen.py 依優先序(直測 > 城市參考 > 模型)解析出每條鏈路的
+  // rtt.edges 已由 pipeline/gen.mjs 依優先序(直測 > 城市參考 > 模型)解析出每條鏈路的
   // 「最佳可用 RTT」並標記 src;此處據以推導建議成本,讓使用者一鍵帶入或比對。
   // 註:當前 topology.js 的 cost 即「人為/有效值」(編輯基準),參考晶片不會自動覆寫它。
   const RTT_OK  = typeof rtt !== 'undefined' && rtt && Array.isArray(rtt.edges);
