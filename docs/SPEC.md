@@ -7,7 +7,7 @@ and visual state machine of the Topocide POC.
 
 ## Numbering convention (read this first)
 
-- **Algorithms**: always anchored by **§ number** (§4–§10); the block comments in `engine.js` likewise lead with `§N —`, for two-way traceability.
+- **Algorithms**: always anchored by **§ number** (§4–§10, §15); the block comments in `engine.js` likewise lead with `§N —`, for two-way traceability.
 - **UI tabs**: `C1–C10`, purely the naming of the 10 tabs in `index.html`, **used for the screen only**.
 
 In other words `Cx` always means a UI tab; algorithms no longer use C (an older
@@ -37,7 +37,7 @@ const topology = {
 };
 ```
 
-> **Note (edit.html internal state)**: In edit.html's internal state, externals are stored per-node (`node.externals`). Export flattens them back to the top-level `externals` array for `topology.js` compatibility.
+> **Note (edit.html internal state)**: `topology.js` and `engine.js` use only the top-level `externals` array. Inside edit.html, externals are held per-node as `node.externals = [{subnet, metric, metric_type}]` (`advertising_router` is implied by the owning node); export flattens them back to the top-level array and restores `advertising_router` from the node id.
 
 ### §1.2 Node
 
@@ -53,16 +53,21 @@ type Node =
       area: string;          // OSPF area (currently only '0' supported)
       stubs?: string[];      // LSA3 equivalent: prefixes (CIDR) advertised by this router
       isASBR?: boolean;      // whether it is an ASBR (injects LSA5 externally)
-      externals?: External[]; // LSA5 advertisements, per-node (moved from top-level topology.externals array). Only present on router nodes with isASBR=true.
       isABR?: boolean;       // whether it is an ABR (inter-area computation not yet enabled)
     }
   | {
-      id: string;            // starting with 'PN' denotes a pseudo-node (LSA2 abstraction)
+      id: string;            // must start with 'PN' (LSA2 abstraction); engine.js detects pseudo-nodes by this id prefix
       label: string;
       type: 'pseudonode';
       subnet: string;        // the CIDR of this transit LAN
     };
 ```
+
+> **Id constraint**: router ids must **not** start with `PN` — `buildAdjacency` and
+> `stripPseudo` decide "pseudo-node" by the `PN` id prefix, not by `type`
+> (`engine.js` §3 / §4.3). Known issue: the OSPF importer maps hostname prefix `CB`
+> to city code `PNH`, producing router ids `PNH1`, `PNH2`, … that are misread as
+> pseudo-nodes.
 
 ### §1.3 Edge
 
@@ -74,8 +79,9 @@ type Edge =
       target: string;
       cost: number;          // forward cost (source → target)
       costRev?: number;      // reverse cost (p2p only; if omitted equals cost, i.e. symmetric)
-      capacity?: number;     // link capacity (Gbps), for C4 edge-traffic utilization
+      capacity?: number;     // link capacity (Gbps), for utilization (C4, C5, C9 overflow, C10 optimizer, §4.6)
       type: 'p2p';
+      net?: string;          // OSPF import only: source transit network (e.g. a /30)
     }
   | {
       id: string;
@@ -102,21 +108,26 @@ type External = {
 
 | File | Global / export | Which UI tab | Behavior when missing |
 |------|-----------------|--------------|-----------------------|
-| `demand.js` | `module.exports = { demand }` | C4 edge traffic, C5 failure-sim traffic view | Traffic views show "demand.js not loaded" |
-| `rtt.js` | `module.exports = { rtt }` | C2 RTT/SLO matrix mode (§4.5), C10 cost reference | C2 falls back to cost-only; C10 reference column hidden |
-| `srlg.js` | global `srlg` (no exports) | C5 failure-sim SRLG dropdown | Only single-element failure remains |
+| `demand.js` | global `const demand` (+ `module.exports = { demand }` when `module` exists) | profile dropdown, C3 demand-weighted ranking, C4 edge traffic, C5 before/after traffic, C9 capacity overflow, C10 optimizer | **Currently fatal**: index.html reads `demand.profiles` unguarded at module top level, so a missing file stops the page. Per-tab fallbacks exist (C4 message, C3 weighted toggle disabled, C10 optimizer message) but are unreachable until that guard is added |
+| `rtt.js` | global `const rtt` (+ `module.exports = { rtt }` when `module` exists) | C2 RTT/SLO matrix mode (§4.5), C10 cost reference (also reads `fiberRttPerKm`) | C2 falls back to cost-only; C10 reference column stays visible, p2p rows show "no reference" with an amber warning bar |
+| `srlg.js` | global `srlg` (no exports) | C5 failure-sim SRLG dropdown | C5 dropdown offers only single-router failures |
 | `draft.js` | `window.Draft` | index.html + edit.html localStorage persistence | — |
 
-`draft.js` is a shared localStorage persistence module. Exports `window.Draft` with `read(topoKey)`, `write(data, topoKey)`, `clear(topoKey)`. Per-topology keys via `?topo=` URL param. 2-hour expiry. Used by both index.html and edit.html.
+`draft.js` is a shared localStorage persistence module. It exposes
+`window.Draft = { KEY, MAX_AGE, read(), write(data), clear() }` with a **single**
+key `blastradius-draft` and a 2-hour expiry (`_savedAt` stamp). Both pages pass a
+topo key (`Draft.read(topoKey)`, `Draft.write(data, topoKey)`), but `draft.js`
+ignores it — see §2.1 Known issues.
 
-`demand.js` provides **5 scenario profiles** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — switched via `demand.active`; `engine.js` only reads `demand.matrix` / `demand.default` (profile switching is transparent to the algorithms). Values are **float Gbps** (1 decimal place in gen.mjs; 3 decimal places in companions.mjs). `rtt.js` contains only `matrix` (city×city RTT) and `edges` (PoP node-pair RTT); the `cityRef` field has been removed (it was a mirror of `city_rtt.csv`, never consumed by the frontend).
+`demand.js` provides **5 scenario profiles** — `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` — switched via `demand.active`; `engine.js` only reads `demand.matrix` / `demand.default` (profile switching is transparent to the algorithms). Values are Gbps numbers: gen.mjs emits 1 decimal place and companions.mjs 3 (the committed `demand.js` comes from an earlier generator and holds integers). `rtt.js` = `{ unit, note, fiberRttPerKm, timestamp, matrix, edges }`, where `matrix` is city×city RTT and `edges[]` is `{ a, b, rtt, src }` (PoP node-pair RTT, `src` ∈ `measured` / `city-ref` / `model`). gen.mjs and the edit.html export no longer emit `cityRef` (a mirror of `city_rtt.csv`); the committed `rtt.js` predates this and still contains a legacy `cityRef` that nothing reads.
 
 **OSPF-imported datasets**: `topology.imported.js` (+ companions
 `demand/srlg/rtt.imported.js`) are produced by the import pipeline from real
-`show ip ospf database router/network` output and live **alongside** the demo
-`*.js` (they do not overwrite). The LSDB parser is the shared pure module
+`show ip ospf database router/network` output and are written to `../output/`
+next to the demo `*.js` (they do not overwrite). They are not committed to this
+repo, and the pipeline's `../output/` path does not exist in this checkout. The LSDB parser is the shared pure module
 `ospf-import.js` (imported by both the data editor and
-`working/ospf_to_topology.mjs`); imported router nodes carry `rid` (§1.2) and a
+`pipeline/ospf_to_topology.mjs`); imported router nodes carry `rid` (§1.2) and a
 safe-token `id`. `OSPF_CITY` values in `ospf-import.js` are plain city code strings;
 country is derived from `CITY_GEO` in `gravity.js` (the SSOT for city geography).
 See CLAUDE.md for the toolchain and fixed generation order.
@@ -141,6 +152,7 @@ See CLAUDE.md for the toolchain and fixed generation order.
 │   §8   Asymmetric                                       │
 │   §9   Prefix Heatmap                                   │
 │   §10  N-1 Worst-case                                   │
+│   §15  Weight Optimization                              │
 ├────────────────────────────────────────────────────────┤
 │ Module D: State Machine    (§11)                        │
 │   edgeStates / nodeStates  (op + role)                  │
@@ -150,10 +162,61 @@ See CLAUDE.md for the toolchain and fixed generation order.
 └────────────────────────────────────────────────────────┘
 ```
 
-The bottom-up call direction is strictly "downward dependency" — UI calls Engine,
-Engine calls Builder, Builder reads Topology. The State Machine is the bridge
+The call direction is "downward dependency" only — UI calls Engine and also calls
+the Builder directly (`buildAdjacency`, `buildPrefixIndex`; both are pure exports of
+`engine.js`), Engine calls Builder, Builder reads Topology. The State Machine is the bridge
 between UI and Engine: UI manipulates persistent state via `setEdgeOp / setNodeOp`,
 and the Engine reads it through the `failedEdges / failedNodes` facade.
+
+### §2.1 Persistence & sync (edit.html ↔ index.html)
+
+```
+user action (Inspector / cy interaction)
+            ↓
+    cy (canvas, Cytoscape.js)
+            ↕  _skipCySync prevents feedback loops
+nodes / edges / positions Maps (topology SSOT; node.externals folded in)
+            ↕
+D / S / R (demand / srlg / rtt objects, edited by each tab)
+            ↓
+markDirty (1.5 s debounce)
+    → Draft.write → localStorage (draft.js, 2 h expiry)
+    + edit.html posts 'topo-update' on BroadcastChannel 'topocide'
+      (nodes / edges / positions only) → index.html merges it into its draft and reloads
+    + CF Workers + R2 (edit.html only): manual push via the sync button;
+      automatic pull on load when there is no local draft
+```
+
+**Write paths** (edit.html): Inspector fields and stub chips write the Maps first,
+then sync cy with `_skipCySync`; cy drag events write back to the Maps (ghost
+elements filtered by `isGhost()`); D/S/R tabs mutate their objects and call
+`markDirty()` at the end of render; `renameEle` updates cy + D/S/R together.
+`hydrateAll` (draft / remote restore) sets `_hydrating` only around its final
+`select(null); refresh()`, so that refresh does not re-mark dirty; loading the
+bundled `.js` files does call `markDirty()` (and so writes a draft).
+
+**Load priority**
+- edit.html: local draft > remote (R2) > bundled `.js`
+- index.html: broadcast > local draft > bundled `.js` (the remote loader is a
+  commented-out stub, not implemented)
+- `?topo=<key>` is carried between the two pages; the R2 key falls back to a
+  per-browser client id when absent.
+
+**Decided against**: an EventBus / Proxy layer that fans out every Map write.
+`_skipCySync` already breaks the Inspector → Maps → cy loop, manual `markDirty()`
+covers D/S/R deep mutation, and pub/sub complexity (missed topics, source flags,
+debounce layers) outweighs the gain at this scale.
+
+**Known issues**
+- `draft.js` `read()` / `write()` ignore the topo key callers pass in, so every
+  `?topo=` shares one localStorage draft (`blastradius-draft`).
+- index.html takes only nodes / edges / positions from a draft or broadcast;
+  demand / srlg / rtt always come from the bundled files (no cloud loader either).
+- External (LSA5) edits made in edit.html do not reach index.html: the draft
+  carries `node.externals`, but index.html and `buildPrefixIndex` read only the
+  top-level `topology.externals`.
+- D/S/R deep mutation is not auto-detected (mitigated by `markDirty()` at render end).
+- With `RTT_OK=false` the optimizer has no RTT floor; p2p fields show an amber warning.
 
 ---
 
@@ -161,8 +224,8 @@ and the Engine reads it through the `failedEdges / failedNodes` facade.
 
 ### §3.1 Adjacency (`buildAdjacency`)
 
-Converts `topology.edges` into the adjacency list `adj[u] = [[v, cost], ...]`
-used by Dijkstra. Three rules:
+Converts `topology.edges` into the adjacency list `adj[u] = [[v, cost, edgeId], ...]`
+used by Dijkstra (`edgeId` keeps parallel links distinct). Three rules:
 
 **Rule 1 — p2p edge**
 
@@ -178,10 +241,13 @@ add(router, pseudo, cost)   // Router → Pseudo: has cost
 add(pseudo, router, 0)      // Pseudo → Router: fixed 0
 ```
 
+The pseudo end is the endpoint whose id starts with `PN` (either orientation is
+accepted).
+
 **Rule 3 — failure filtering**
 
 - `failedEdges.has(e.id)` → skip the whole edge
-- `failedNodes.has(u || v)` → skip that direction
+- `failedNodes.has(u) || failedNodes.has(v)` → skip that direction
 
 ### §3.2 Prefix Index (`buildPrefixIndex`)
 
@@ -200,23 +266,29 @@ backed-up. Sources:
 
 ### §4.1 Algorithm
 
-Dijkstra + equal-cost relaxation expansion. `preds[v]` is a `Set<predecessor>`,
-allowing multiple predecessors:
+Dijkstra + equal-cost relaxation expansion. `dijkstraSource(adj, src)` returns
+`{ dist, preds }`; `preds[v]` is an **array of `{ u, id }`** (predecessor node +
+edge id), allowing multiple predecessors:
 
 ```
-for each neighbor (v, c) of u:
+for each neighbor (v, c, id) of u:
   nd = dist[u] + c
   if nd < dist[v]:
     dist[v] = nd
-    preds[v] = { u }
+    preds[v] = [{ u, id }]
   elif nd == dist[v]:
-    preds[v].add(u)
+    preds[v].push({ u, id })   // no dedup: parallel equal-cost links stay separate
 ```
+
+Equal-distance nodes pop from the heap in insertion order (`[dist, seq]` tie-break).
 
 ### §4.2 ECMP path enumeration
 
-Walk `preds` backward from `dst`, DFS-reconstructing the full list of
-shortest paths source → dst.
+`enumeratePaths(dist, preds, src, dst)` expands `preds` recursively from `dst`
+and returns `{ cost, paths, edgePaths }`, one entry per **edge-distinct** path
+(parallel links give the same node sequence with different `edgePaths`). An
+unreachable `dst` returns `{ cost: Infinity, paths: [], edgePaths: [] }`.
+`dijkstraECMP(adj, src, dst)` = `dijkstraSource` + `enumeratePaths`.
 
 ### §4.3 Pseudo-node post-processing
 
@@ -228,15 +300,32 @@ shortest paths source → dst.
 `resolveLPM(prefixIndex, target)`: currently implemented as "exact match +
 default-route (`0.0.0.0/0`) fallback". Full LPM is on the Roadmap.
 
-### §4.5 Matrix RTT / SLO mode (C2 presentation)
+### §4.5 Matrix modes: RTT / SLO + Path Diversity (C2 presentation)
 
-C2 offers several view modes (**default RTT**); **Diversity** (edge-disjoint path count) and **Bandwidth-survival** (§4.6) join the two below. **Cost** shows the §4 shortest-path
-cost. **RTT / SLO** sums each edge's RTT along the shortest path (per-edge RTT
-from `rtt.edges`, else the `rtt.matrix[cityA][cityB]` city-pair lookup; ECMP →
-min over paths) and shades each cell against an SLO target (default ≤150 ms),
-reporting coverage (% of reachable pairs within target). This is a presentation
-layer in `index.html` — the path itself is still §4's cost-based SPT. Needs
-`rtt.js`; without it the mode falls back to cost.
+C2 has four view modes (**default RTT / SLO**): Cost, RTT / SLO, Path Diversity,
+and Bandwidth-survival (§4.6). Rows are the routers reachable from the first
+router under the current failures, ordered by `dijkstraDist` from it; each cell is
+a per-pair `dijkstraECMP(adj, a, b)`.
+
+**Cost** shows the §4 shortest-path cost.
+
+**RTT / SLO** sums each edge's RTT along the shortest path and shades each cell
+against an SLO target (default ≤150 ms). Per-edge RTT: `rtt.edges` keyed by node
+pair (either orientation), else `rtt.matrix[cityA][cityB]` then
+`rtt.matrix[cityB][cityA]`; an edge with **no RTT data counts as 0 ms** (known
+issue — transit edges have no RTT, so paths through pseudo-nodes are
+under-counted). ECMP → min over paths. Coverage = pairs within target ÷ all
+displayed off-diagonal pairs, where unreachable (∞) cells and cells without an RTT
+value count as over target. This is a presentation layer in `index.html` (no
+engine § block) — the path itself is still §4's cost-based SPT. Needs `rtt.js`;
+without it the mode falls back to cost.
+
+**Path Diversity** — `pairwiseEdgeConnectivity(edges, routerIds)` (engine block
+`§4.5 — PATH DIVERSITY`): the number of edge-disjoint paths per pair, computed by
+Edmonds-Karp max-flow with capacity 1 per edge per direction (parallel edges count
+separately). The UI passes the live edges including transit (pseudo-nodes act as
+relays) with right-click failures removed. Cell tiers: k = 0 red, 1 orange,
+2 yellow, ≥ 3 green.
 
 ### §4.6 Matrix bandwidth-survival mode (C2 presentation)
 
@@ -250,22 +339,29 @@ exceed 100 %** (see below).
 It is **OSPF cost-based**: bandwidth is measured along the paths traffic
 actually takes (§4 cost-based SPT / ECMP), not along an idealised
 capacity-maximising path. Built on `buildAdjacency` + `dijkstraSource` (§3.1,
-§4.1); only `p2p` edges with `capacity > 0` contribute bandwidth (transit /
-pseudo-node edges affect routing but carry no capacity).
+§4.1); **every** edge with `capacity > 0` contributes bandwidth, p2p or transit
+(edges without capacity are ignored when taking the minimum). Computed on the
+intact topology: right-click failures are not applied; only row / column
+membership and ∞ cells reflect live failures.
 
 **Model:**
 
 1. **Primary** — the OSPF shortest-path **DAG** for the pair (all equal-cost
    ECMP paths). `spDagEdges` walks `preds` to collect every edge on that DAG
    (the ECMP edge union, without enumerating paths). Denominator =
-   `minCapOf(primary edges)`, the narrowest `p2p` capacity on the DAG.
-2. **N-1** — fail **each edge on the primary DAG** in turn
-   (`buildAdjacency(edges, {eid})`), recompute the OSPF DAG, and take the
-   narrowest capacity over its edge union. Unreachable after failure → 0.
-   `worstCase = min` across all these scenarios.
-3. `rate = ceil(worstCase / denominator × 100)` — **not capped**, symmetric
-   (`i < j`, mirrored; the `src → dst` direction is authoritative when cost is
-   asymmetric).
+   `minCapOf(primary edges)`, the narrowest capacity on the DAG.
+2. **N-1** — fail **each edge on the primary DAG** in turn, transit edges
+   included (`buildAdjacency(edges, {eid})`), recompute the OSPF DAG, and take the
+   narrowest capacity over its edge union. Unreachable after failure → 0; a
+   surviving DAG with no capacity data → 0. `worstCase = min` across all these
+   scenarios.
+3. `rate = ceil(worstCase / denominator × 100)` — **not capped**.
+4. If the primary is unreachable or its DAG has no capacity data, the result is
+   `{ primary: 0, worstCase: 0, rate: 0 }` and the UI shows "—".
+5. Only `routerIds[i] → routerIds[j]` with `i < j` is computed and mirrored; with
+   asymmetric costs both cells reflect that direction (the UI passes routers in
+   distance order from the first router), not the src of the clicked cell. Each
+   pair reruns `dijkstraSource`.
 
 **Why it can exceed 100 %.** When the OSPF primary is a thin low-cost path and a
 single failure reroutes traffic onto a higher-cost but fatter detour, the
@@ -286,19 +382,26 @@ forwarding. Presentation layer in `index.html`; requires edge `capacity`.
 
 ### §5.1 Cut-edge recompute
 
-`backupPath(topo, src, dst, removedEdges)` = apply `removedEdges` onto
-`failedEdges`, then rerun §4.
+`backupPath(topo, src, dst, removedEdges)` builds adjacency from the intact
+topology minus `removedEdges` only (`failedEdges = new Set(removedEdges)`; live
+failures and failed nodes are not included), then runs `dijkstraECMP`.
+
+> Numbering: there is no §5.2 / §5.3; §5.4 keeps its number so existing
+> references (engine.js `§5.4`, §10.4) stay valid.
 
 ### §5.4 Unprotected Segment Scan
 
-`unbackupSegmentScan` — for each edge on the primary path, try removing it; if
-the post-removal cost = ∞, mark the edge as unbacked:
+`unbackupSegmentScan(topo, src, dst)` — for each edge in the union of **all**
+primary ECMP `edgePaths` (transit edges included), try removing it; if the
+post-removal cost = ∞, mark the edge as unbacked. It always uses the intact
+topology (even though C1's displayed primary respects live failures):
 
 ```
-primary  = dijkstraECMP(adj, src, dst)
-for each edge e in primary.edges:
+primary  = dijkstraECMP(buildAdjacency(topo.edges), src, dst)
+for each edge e in union(primary.edgePaths):
   if backupPath(topo, src, dst, [e]).cost == ∞:
     unbacked.push(e)
+return { primaryEdges, unbacked }   // unreachable primary → both empty
 ```
 
 Semantics: **the moment this edge breaks, src → dst is severed with no backup path available.**
@@ -309,8 +412,9 @@ Semantics: **the moment this edge breaks, src → dst is severed with no backup 
 
 ### §6.1 Connectivity
 
-`connectedComponents(adj, routerIds)`: BFS over routers-only (skipping
-pseudo-nodes), partitioning into connected components.
+`connectedComponents(adj, routerIds)`: iterative DFS (stack) over **all** nodes —
+pseudo-nodes are traversed, which is what connects routers sharing a LAN — and
+the resulting components list routers only.
 
 ### §6.2 Traffic redistribution (equal-weight edge load)
 
@@ -323,14 +427,23 @@ load[edge] = Σ over all (a→b) pairs: 1 / r.paths.length
 ECMP equal-weight; each path adds to every edge it traverses. This is exactly
 **edge betweenness centrality (Edge BC)**.
 
-`simulateNodeFailure` takes the difference of two whole-network loads
-(`before / after`) and outputs each edge's `direction ∈ {inc, dec, none}` and `changePct`.
+There is no engine function for the before/after diff: tab **C5** computes it
+inline. It loads the whole network twice (`before` = no failure, `after` = the
+selected element / SRLG failed) with `allPairsTraffic` (§6.2b) when demand.js is
+loaded, otherwise `allPairsLoad`. Per edge: failed edges become rows of class
+`down` with `changePct = -100` (0 if `before = 0`); otherwise
+`direction ∈ {inc, dec, none}`, `changePct = (after − before) / before × 100`
+(`Infinity` when `before = 0` and `after > 0`); `none` edges are dropped; `inc` rows
+are class `up`, `dec` rows class `dec`. Sort: down → up by |Δ%| → dec.
 
 ### §6.2b Traffic-weighted edge load (`allPairsTraffic`)
 
-`allPairsTraffic(topo, demand, failedEdges, failedNodes)` — the same SPT
-enumeration round as §6.2, but each path's accumulation weight changes from "1"
-to "`demand[a][b]`" (consuming the `demand.js` traffic matrix).
+`allPairsTraffic(topo, demand, failedEdges, failedNodes)` — the same
+single-source enumeration scheme as §6.2 (`dijkstraSource` + `enumeratePaths`,
+its own all-pairs pass), but each path's accumulation weight changes from "1"
+to "`demand[a][b]`" (consuming the `demand.js` traffic matrix). Returns
+`{ traffic, trafficFwd, trafficRev, totalPairs, reachablePairs, lostPairs,
+totalDemand, servedDemand, lostDemand, lostDemandPairs }`.
 
 **Full-duplex / unidirectional capacity**: circuits are full-duplex by default
 and `capacity` is a **unidirectional** value. So accumulation is split by actual
@@ -342,7 +455,7 @@ direction**. Combined with `edge.capacity` this yields
 overloaded"), avoiding the ~2× overestimate from summing both directions and
 dividing by a unidirectional capacity.
 
-- transit likewise: `fwd` = ingress (`router→PN`, controllable via interface cost), `rev` = egress (`PN→router`, fixed 0 for Type-2).
+- transit likewise: `fwd` = ingress (`router→PN`, controllable via interface cost), `rev` = egress (`PN→router`, fixed 0 for Type-2) — this holds because the data stores transit edges with `source = router` (as in the bundled data); `buildAdjacency` accepts either orientation.
 - when `demand.js` is missing, the caller must guard against this (the C4 tab shows a "not loaded" notice).
 - C4 edge traffic, C5 failure sim, §15 `evalCongestion` (MLU), and C9 N-1 overflow **all read the same `traffic[edge]`** (peak), so the direction fix takes effect in one place and downstream needs zero changes. `allPairsLoad` (§6.2, edge betweenness) is a capacity-free centrality, direction-agnostic, and unaffected.
 
@@ -361,14 +474,15 @@ Implementation details:
 - ECMP equal-weight over **node-distinct** paths: `w = 1 / (node-distinct path count)`. Parallel equal-cost links (two cables, identical node sequence) collapse to one path and do **not** inflate the node's centrality — link-level parallelism is a capacity matter (handled per-edge by §6.2b), not node betweenness.
 - `stripPseudo(path)` filters pseudo-nodes first, keeping only the router-level view
 - exclude endpoints: loop `for i in [1, stripped.length - 1)`, head and tail don't count as "transit"
-- shares the same SPT-enumeration round as §6.2 `allPairsLoad` (Edge BC), but accumulates onto the intermediate node instead of the edge
+- uses the same single-source enumeration scheme as §6.2 `allPairsLoad` (Edge BC; separate pass), but accumulates onto the intermediate node instead of the edge
 - **shared core**: §6.3 and §6.3b both run through one `computeNodeLoad(topo, demand, …)` (`demand=null` → unit/structural; `demand` given → Gbps), via the `nodeDistinctPaths` / `accNodeBetweenness` helpers with single-source reuse. The two exported names are thin wrappers.
 
 > **UI mapping**: tab **C3 Centrality** presents both §6.2's **Edge BC** (per link)
 > and this section's **Node BC** (per router); each does a 4-tier classification
-> (`idle = 0 / rare > 0 / normal > 0.1·max / hub > 0.4·max`), mapping to the
-> procurement recommendations "dual-box dual-path / maintain / can downgrade /
-> candidate for merging an adjacent PoP".
+> (`hub > 0.4·max / normal > 0.1·max / rare > 0 / idle = 0`; thresholds in
+> `THRESHOLDS` in index.html), mapping to recommendations (i18n `c3.*.act.*`):
+> - links: hub "Expand & dual-home" / normal "Maintain" / rare "Bandwidth-downsize candidate" / idle "Removal candidate"
+> - routers: hub "Dual-box dual-path" / normal "Maintain" / rare "Can downsize" / idle "No transit traffic"
 
 ### §6.3b Demand-weighted Node Betweenness
 
@@ -404,16 +518,19 @@ Implementation details:
 
 `ecmpBackupCheck` / `ecmpBackupScanAll` — for each (src, dst):
 
-1. compute primary; if `paths.length < 2` → `reason: 'no-ecmp'`; or if they share the same first-hop → `reason: 'single-first-hop'` (both `status: n/a`)
-2. collect `ecmpEdgeIds` = the primary's set of first-hop edges
-3. for each `eid ∈ ecmpEdgeIds`, remove it and recompute:
+1. compute primary; if fewer than 2 edge-distinct paths (`edgePaths.length < 2`) → `reason: 'no-ecmp'` (`status: n/a`)
+2. collect `ecmpEdgeIds` = the set of each path's first **edge id**; if fewer than 2 distinct → `reason: 'single-first-hop'` (`status: n/a`). Two parallel links to the same neighbour count as 2 first hops.
+3. for each `eid ∈ ecmpEdgeIds`, remove it and recompute; **return on the first failing member** (the rest are not evaluated):
    - if unreachable → `status: 'failed', reason: 'remove-unreachable', eid`
    - if the new path's first-hop is not in `ecmpEdgeIds \ {eid}` → `status: 'failed', reason: 'backup-non-ecmp', eid, bid`
 4. all pass → `status: 'passed'`
 
+`ecmpBackupScanAll(topo)` runs this on the intact topology for all ordered pairs
+and returns `[{ src, dst, status, reason?, eid?, bid? }]`.
+
 > **reason contract**: `reason` is always a **stable code** (kebab) plus structured
 > params (`eid` / `bid`); the engine emits **no prose strings**. Display text is the
-> UI's job, via the `REASON_TEXT` lookup table (which is also the i18n reason dictionary).
+> UI's job, via the i18n keys `c6.reason.<code>` (`t('c6.reason.' + r.reason, r)`).
 
 **Semantics**: in an ideal ECMP group, after any member fails, traffic should be
 taken over by the other members of the group and should not escape the group.
@@ -427,25 +544,31 @@ taken over by the other members of the group and should not escape the group.
 ```
 fwd = SPT(a → b)
 rev = SPT(b → a)
-fwdSig = sorted set of stripPseudo(p).join('>')
-revSig = sorted set of stripPseudo(p).reverse().join('>')
+fwdSig = set of stripPseudo(p).join('>')
+revSig = set of stripPseudo(p).reverse().join('>')
 ```
 
-If `fwd.cost ≠ rev.cost` or `fwdSig ≠ revSig` → add to the asymmetric list.
+If `fwd.cost ≠ rev.cost` or `fwdSig ≠ revSig` (set comparison) → add to the
+asymmetric list. Pairs unreachable in either direction are skipped silently.
+Returns `[{ a, b, fwdCost, revCost, fwdPaths, revPaths }]` (`revPaths` already
+reversed).
 
 ---
 
 ## §9 Prefix Advertisement-Redundancy Heatmap
 
 `computeHeatmap(topo, prefixIndex)` — per router, count `single-advertised /
-total`; Ratio maps to color:
+total` and return `{ notbackuped, total, ratio, prefixes }`; Ratio maps to color
+(thresholds hard-coded in C8, not in `THRESHOLDS`):
 
 | Ratio | Color | Meaning |
 |-------|-------|---------|
 | 0 | Green | all prefixes have redundant advertisement |
-| 0–0.33 | Yellow | a few prefixes are singly advertised |
-| 0.33–0.66 | Orange | about half the prefixes have no redundant advertisement |
+| (0, 0.33] | Yellow | a few prefixes are singly advertised |
+| (0.33, 0.66] | Orange | about half the prefixes have no redundant advertisement |
 | > 0.66 | Red | most prefixes are singly advertised |
+
+A router with no prefixes gets ratio 0 and shows green.
 
 ---
 
@@ -462,9 +585,10 @@ scenarios =
 ```
 
 Transit edges are not counted as physical failure scenarios (they are an LSA2
-internal abstraction). SRLG group failure (multiple edges / nodes failing
-simultaneously) is expanded by the UI layer's `expandSRLG` and then fed into the
-same recompute logic.
+internal abstraction). **SRLG groups are not part of the §10 scan**: SRLG group
+failure is available only in C5 (§6), where the UI's `expandSRLG` expands a group
+into edges / nodes. Pairs whose baseline is ∞, or that have a failed endpoint, are
+skipped.
 
 ### §10.2 Dual-perspective accumulation
 
@@ -490,10 +614,17 @@ single-point failure that makes the pair unreachable (∞), not just the first o
 failStats[scenario] = {
   unreachable: how many pairs this failure makes unreachable,
   degraded:    how many pairs still connect but get slower,
-  totalDelta:  Σ (worstCost - baseCost),
-  maxRatio:    the maximum worst / base ratio,
+  totalDelta:  Σ (this scenario's cost − baseCost) over pairs that got slower,
+  maxRatio:    max (cost / baseCost) over degraded pairs (starts at 1; unreachable
+               pairs never set it, so it is never ∞),
+  affected:    the affected pairs,
 }
 ```
+
+Returns `{ pairRows, failureRows, baseCost }`. `pairRows` keeps only pairs whose
+`worstCost ≠ base`; `failureRows` keeps only scenarios with `unreachable > 0` or
+`degraded > 0`. (Known issue: the C9 UI has a `maxRatio === Infinity` branch that
+can never fire.)
 
 ### §10.3 Sorting
 
@@ -505,7 +636,7 @@ failStats[scenario] = {
 | Dimension | §5.4 Unbackup | §10 N-1 |
 |-----------|---------------|---------|
 | Focus | a single (src, dst) pair | all pairs network-wide |
-| Failure scope | only edges on the primary path | all edges + all routers (+ SRLG groups) |
+| Failure scope | only edges on the primary path | all p2p edges + all routers (no SRLG) |
 | Decision | binary (reachable / not) | continuous (ratio + unreachable count) |
 | Use | "is this path safe?" | "where is the network most fragile?" |
 
@@ -522,13 +653,14 @@ Each entity holds two independent states:
 | Dimension | Source | Cross-tab behavior | Edge values | Node values |
 |-----------|--------|--------------------|-------------|-------------|
 | **op** | persistent user action (right-click failure) | not cleared | `healthy` / `failed` | `up` / `down` |
-| **role** | transient annotation from analysis results | auto-cleared on tab switch | `none` / `primary` / `backup` / `unbacked` / `load-inc` / `load-dec` / `failed-by-node` / `bc-{hub/normal/rare/idle}` | `none` / `endpoint` / `highlight` / `asym-mark` / `heat-{green/yellow/orange/red}` / `failed-node` |
+| **role** | transient annotation from analysis results | auto-cleared on tab switch | `none` / `spt` / `backup` / `unbacked` / `load-inc` / `load-dec` / `simulated-fail` / `bc-{hub/normal/rare/idle}` / `traffic-{overflow/high/mid/low/idle}` | `none` / `endpoint` / `highlight` / `asym-mark` / `heat-{green/yellow/orange/red}` / `failed-node` / `bc-{hub/normal/rare/idle}` |
 
 ### §11.2 Render rules
 
 ```
 op takes priority:
-  edge.op = failed         → render as failed (red dashed)
+  edge.op = failed, or edge role = simulated-fail
+                           → render as failed (red dotted, semi-transparent)
   node.op = down           → render as failed-node
   edge endpoint node.op = down → derived as failed (not written back to edge.op, keeping a single data source)
 otherwise role maps directly to the corresponding CSS class.
@@ -544,39 +676,42 @@ algorithms as parameters — so the algorithm layer need not know the state-mach
 
 1. all Cytoscape `addClass / removeClass` must go through `setEdgeOp / setEdgeRole / setNodeOp / setNodeRole`; direct manipulation of element classes is forbidden
 2. on tab switch, call `clearAllRoles()` — clears role only, leaves op untouched
-3. the "Reset view" button = `clearAllRoles()`; "Clear all failures" = `failedEdges.clear() + failedNodes.clear()`; the two are semantically separate
+3. the "Reset view" button (C1) = `C1_Path.reset()` → `clearAllRoles()` + clear the C1 result panels; "Clear all failures" = `failedEdges.clear() + failedNodes.clear()` followed by an unconditional C1 path re-render (whatever tab is active); the two are semantically separate
 
 ---
 
 ## §12 UI Tab Matrix (authoritative reference)
 
 `index.html` has **10 tabs** in three groups. The table below is the
-authoritative mapping of UI tab → backing § / function:
+authoritative mapping of UI tab → backing § / function. Switching tabs calls
+`TABS[tab].activate()` when the module defines it. C numbers follow the module
+names (`C1_Path` … `C10_Edges`); on screen the audit group is ordered Failure,
+N-1, ECMP, Asymmetric, Prefix.
 
 ### Live-status group (consumes right-click failure markers)
 
 | UI tab | UI No. | Backing § / function | Auto-run on switch |
 |--------|--------|----------------------|--------------------|
-| Path | C1 | §4 `dijkstraECMP` + §5.4 `unbackupSegmentScan` | `renderPath(src, dst)` |
-| Matrix | C2 | §4 all-pair `dijkstraDist` (+ §4.5 RTT/SLO, §4.6 bandwidth-survival modes) | `renderMatrix()` |
-| Centrality | C3 | §6.2 `allPairsLoad` (Edge BC) + §6.3 `computeNodeBC` (Node BC); node ranking can switch to §6.3b `computeNodeTraffic` (traffic-weighted, needs demand.js) | `listAllPairs.click()` |
-| Edge traffic | C4 | §6.2b `allPairsTraffic` (needs demand.js) | auto-computes actual load / utilization |
+| Path | C1 | §4 `dijkstraECMP` + §5.4 `unbackupSegmentScan` | `C1_Path.render(src, dst)` |
+| Matrix | C2 | §4 per-pair `dijkstraECMP`; four modes: cost, RTT/SLO (§4.5), Path Diversity `pairwiseEdgeConnectivity` (§4.5), bandwidth-survival `n1BandwidthSurvivability` (§4.6; computed on the intact topology) | `C2_Matrix.render()` |
+| Centrality | C3 | §6.2 `allPairsLoad` (Edge BC) + §6.3 `computeNodeBC` (Node BC); node ranking can switch to §6.3b `computeNodeTraffic` (traffic-weighted, needs demand.js) | `C3_AllPairs.render()` |
+| Link traffic | C4 | §6.2b `allPairsTraffic` (needs demand.js) | `C4_Traffic.render()` (actual load / utilization) |
 
 ### Design-audit group (ignores right-click failures, based on the complete topology)
 
 | UI tab | UI No. | Backing § / function | Auto-run on switch |
 |--------|--------|----------------------|--------------------|
-| Failure simulation | C5 | §6 `connectedComponents` + §6.2/§6.2b before-after delta; SRLG via `expandSRLG` | carries scenarios, user selects element / SRLG |
-| ECMP | C6 | §7 `ecmpBackupScanAll` | auto-scan |
-| Asymmetric | C7 | §8 `detectAsymmetric` | auto-scan |
-| Prefix | C8 | §9 `computeHeatmap` | auto-scan |
-| N-1 | C9 | §10 `computeN1WorstCase` | `runN1Scan.click()` |
+| Failure sim | C5 | §6 `connectedComponents` + inline before/after delta of §6.2b / §6.2; SRLG via `expandSRLG` | none — user selects an element / SRLG |
+| ECMP | C6 | §7 `ecmpBackupScanAll` | none — `runEcmpCheck` button |
+| Asymmetric | C7 | §8 `detectAsymmetric` | none — `runAsymScan` button |
+| Prefix | C8 | §9 `computeHeatmap` | none — `runHeatmap` button |
+| N-1 | C9 | §10 `computeN1WorstCase` (+ capacity overflow for the top failures via `allPairsTraffic`) | none — `runN1Scan` button |
 
 ### Edit group
 
 | UI tab | UI No. | Backing § / function | Auto-run on switch |
 |--------|--------|----------------------|--------------------|
-| Link | C10 | §1.3 editing + §4 live recompute; includes §15 congestion optimization (`optimizeWeights`, needs demand.js) | `renderEdgeEditor()` |
+| Links | C10 | §1.3 editing (cost edits repaint labels; paths recompute when you switch to a live-group tab and its `activate` runs — `rerenderIfPathActive` is a no-op while C10 is active); includes §15 congestion optimization (`optimizeWeights`, needs demand.js) | `C10_Edges.render()` |
 
 > **Group semantics**: the live-status group reflects the failures manually
 > marked on the graph; the design-audit group is always based on the complete
@@ -599,17 +734,19 @@ for every (a,b), wasting V−1 redundant runs).
 | Module | Single-run cost | Trigger frequency |
 |--------|-----------------|-------------------|
 | §4 SPT (single pair) | O((V+E) log V) | user click |
-| §4 Matrix / Load / Traffic (all pairs) | **V × single-source** = O(V · (V+E) log V) | tab switch |
+| §6.2 Load / §6.2b Traffic (all pairs) | **V × single-source** = O(V · (V+E) log V) | tab switch |
+| §4 Matrix (C2) | **V(V−1) × single-source** (`dijkstraECMP` per pair; reuse not yet applied) | tab switch |
 | §6 Failure Sim / Load | 2 × all-pairs | user click |
 | §7 ECMP Check | O(V² · k · SPT) | user click, k = ECMP edge count (single-source reuse not yet applied) |
 | §8 Asymmetric | **V × single-source** + V² expansion | user click |
 | §10 N-1 | O((V + E) · V × single-source) | user click (cost only, no path expansion) |
-| §4.6 Bandwidth-survival (all pairs) | O(V² · L · (V+E) log V), L = primary-path edge count | C2 mode switch |
+| §4.6 Bandwidth-survival (all pairs) | O(V² · L · (V+E) log V), L = primary-DAG edge count (`dijkstraSource` rerun per pair) | C2 mode switch |
 | §15 Weight optimization | O(maxEvals × all-pairs) (budget cap) | user click |
 
 The built-in synthetic sample is a POC small scale (a handful of routers, dozens
 of edges). With the binary heap + single-source reuse, the §15 weight-optimization
-worst case measured down from ~5.2s to ~1s (about 5×), and the all-pairs Dijkstra
+worst case measured down from ~5.2s to ~1s (about 5×; a one-off measurement on
+one machine and dataset, not a spec value), and the all-pairs Dijkstra
 call count dropped ~V×. The scale is set by the generator and can be scaled up;
 once into real backbone scale (V in the tens to hundreds, E in the hundreds), a
 Web Worker or backend is still needed, plus **incremental SPF** (changing one
@@ -625,26 +762,29 @@ This SPEC corresponds to Topocide POC `v1.x` (after branching off from the
 Topolograph naming). Main differences:
 
 - Added §6.2b traffic-weighted edge load (`allPairsTraffic`) + the C4 edge-traffic tab
-- Added §10 N-1 Worst-case Ranking, wired up to SRLG group failure
+- Added §10 N-1 Worst-case Ranking (single p2p edges + single routers; SRLG group failure is a separate C5 feature, not part of §10)
 - Added §4.6 C2 bandwidth-survival matrix mode (`n1BandwidthSurvivability`; OSPF cost-based ECMP, N-1 worst-case surviving bandwidth, `ceil`-rounded, uncapped — can exceed 100 %)
 - §11 visual state machine pulled out into its own chapter (previously scattered across UI handlers)
 - §12 changed to an authoritative "UI tab (C1–C10) → backing §/function" mapping; algorithms are anchored solely by §, no longer by C numbers (the old `Cx` prefix in engine.js has been removed)
 - Added §6.3b traffic-weighted node centrality (`computeNodeTraffic`) + the C3 transit-count⇄traffic-weighted toggle
 - Added §15 OSPF weight optimization (Fortz-Thorup objective + Tabu Search), integrated into C10; the optimizer's bounds are capped by `COST_CLAMP` (`[5,500]`, a single constant exported by the engine), preventing long-link RTT floors from hitting the ceiling and being frozen
 - Added §4.5 matrix RTT/SLO mode (C2 defaults to an RTT view scored against an SLO target, with coverage %)
-- Added an OSPF LSDB import path: the shared pure module `ospf-import.js` parses `show ip ospf database router/network` into the §1 schema (populating `rid`) and produces `*.imported.js` datasets that live alongside the demo data — the original spec assumed a hand-authored static topology
+- Added an OSPF LSDB import path: the shared pure module `ospf-import.js` parses `show ip ospf database router/network` into the §1 schema (populating `rid`) and can generate `*.imported.js` datasets (written to `../output/` alongside the demo data; not committed to this repo) — the original spec assumed a hand-authored static topology
 - Demand values changed from integer to **float Gbps** (1 d.p. in gen.mjs; 3 d.p. in companions); profile set expanded to 5: `avg` / `max` / `asia_busy` / `amer_busy` / `eu_busy` (companions now matches gen.mjs); RTT CSV files renamed `node_rtt.csv` / `city_rtt.csv`
-- `gravity.js` (in `output/`) is now the SSOT for gravity model constants (D0/K/EMIT/FIBER), `CITY_GEO` (100+ cities, lat/lon/country), and `haversineKmCity()`; browser + Node compatible; imported by `gen.mjs`, `companions.mjs`, `ospf-import.js`, and `edit.html` (replaces `working/gravity.mjs`)
-- `rtt.js` now contains only `matrix` and `edges`; the `cityRef` field has been removed (it was a mirror of `city_rtt.csv`, never consumed by the frontend)
+- `gravity.js` (repo root; the pipeline scripts still import it as `../output/gravity.js`) is now the SSOT for gravity model constants (D0/K/EMIT/FIBER), `CITY_GEO` (100+ cities, lat/lon/country), and `haversineKmCity()`; browser + Node compatible; imported by `gen.mjs`, `companions.mjs`, `ospf-import.js`, and `edit.html` (replaces `working/gravity.mjs`)
+- `gen.mjs` no longer emits `rtt.cityRef` (a mirror of `city_rtt.csv`, never consumed by the frontend); the committed `rtt.js` predates this and still contains it until regenerated
 - `ospf-import.js` `OSPF_CITY` values simplified from `{ city, country }` objects to plain city code strings; country is derived from `CITY_GEO` in `gravity.js`
-- `edit.html` data editor: Equal Earth projection LON0 changed from 140°E to 150°E in both `layoutGeoMap()` and `layoutMetroMap()` (ITU/Telegeography Asia-Pacific convention; seam at −30°W avoids Fortaleza wrapping to the wrong side); new **Metro Map** layout option ("八向化") added — Equal Earth projection → grid quantization → Octilinear Nudge → overlap resolution; parameters in `LAYOUT_PARAMS.metro` (`grid`, `nudgeIter`, `angleTol`, `geoAnchor`, `distPow`, `directions` 8/16/32); ~70–80% of edges achieve octilinear angles
-- **edit.html data architecture**: JS SSOT Maps (nodes/edges/positions) as single source of truth; cy is renderer only. Inspector uses mount/patch pattern — only rebuilds DOM when switching elements, patches field values in-place otherwise. `applyField` writes Maps first, then syncs to Cytoscape (`_skipCySync` flag prevents cy data events from bouncing back to Maps). `externals` relocated from top-level array to per-node `node.externals`. localStorage sync via shared `draft.js` module with BroadcastChannel for cross-tab updates.
-- `metro-tune.html`: new standalone interactive parameter tuner for Metro Map layout; features 6 compression modes, live preview with edge coloring (green=octilinear / orange=near / red=non-octilinear), direction selector (8/16/32), and display controls
-- `serve.py`: new dev HTTP server returning `Cache-Control: no-store`; replaces `python -m http.server` which had ~1 min browser-cache delay
-- **Planned (not implemented)**: explicit-path steering **steer** (Tier 0, pull specific traffic off the shortest path) + bandwidth admission **CAC** (Tier 1, "overflow / admission-fail once full"). Design in `steer.md`; once implemented, merged into a new §.
+- `edit.html` data editor: Equal Earth projection LON0 changed from 140°E to 150°E in both `layoutGeoMap()` and `layoutMetroMap()` (ITU/Telegeography Asia-Pacific convention; seam at −30°W avoids Fortaleza wrapping to the wrong side); new **Metro Map** layout option ("八向化") added — Equal Earth projection → grid quantization → Octilinear Nudge → overlap resolution; parameters in `LAYOUT_PARAMS.metro` (`grid`, `nudgeIter`, `angleTol`, `geoAnchor`, `distPow`); a `directions` 8/16/32 selector exists only in `tools/metro-tune.html`; ~70–80% of edges achieved octilinear angles in a one-off measurement
+- **edit.html data architecture**: JS SSOT Maps (nodes/edges/positions) as single source of truth; cy is renderer only. Inspector uses mount/patch pattern — only rebuilds DOM when switching elements, patches field values in-place otherwise. `applyField` writes Maps first, then syncs to Cytoscape (`_skipCySync` flag prevents cy data events from bouncing back to Maps). Inside edit.html, `externals` are held per-node (`node.externals`) and flattened back to the top-level array on export. localStorage drafts via the shared `draft.js` module; cross-tab updates via a `BroadcastChannel('topocide')` opened in each page (see §2.1).
+- `metro-tune.html` (now `tools/metro-tune.html`): new standalone interactive parameter tuner for Metro Map layout; features 6 compression modes, live preview with edge coloring (green=octilinear / orange=near / red=non-octilinear), direction selector (8/16/32), and display controls
+- `serve.py` (not yet committed to this repo): new dev HTTP server returning `Cache-Control: no-store`; replaces `python -m http.server` which had ~1 min browser-cache delay
+- **Planned (not implemented)**: explicit-path steering **steer** (Tier 0, pull specific traffic off the shortest path) + bandwidth admission **CAC** (Tier 1, "overflow / admission-fail once full"). Design in `docs/design/steering-cac.md`; once implemented, merged into a new §.
 
-The block comments in `engine.js` (`§4 — SPT` …) correspond two-way with the §
-numbers in this document; UI tab numbers are separately in §12.
+The top-level block comments in `engine.js` (`§4 — SPT` …) correspond two-way with
+the § numbers in this document, including the §15.x sub-blocks (tagged by topic:
+§15.1 objective — `ftLinkPenalty` / `evalCongestion`, §15.2 hard constraints —
+`buildWeightBounds`, §15.3 Tabu driver, §15.5 functions — `applyWeights`).
+§5.1 / §6.1 / §6.2 / §10.x have no engine block tag. UI tab numbers are separately in §12.
 
 ---
 
@@ -688,7 +828,8 @@ it can also optionally **adjust transit ingress cost as well** (Option B,
 
 > **Impact of the direction fix**: after switching to unidirectional peak, the
 > earlier "sum both directions / divide by unidirectional capacity" ~2×
-> overestimate disappears. The measured `max` scenario MLU was corrected from
+> overestimate disappears. In a one-off measurement on the dataset of the time
+> (not a spec value), the `max` scenario MLU was corrected from
 > 202% (inflated) to **101%** (70% after optimization, **feasible**) — the
 > original "infeasible" verdict was a counting artifact; capacity is in fact
 > sufficient. transit's `fwd`/`rev` are already separated (§6.2b), so Option B's
@@ -722,20 +863,20 @@ constraints actually in effect are the RTT floor + `COST_CLAMP` (`[5,500]`).
 | Aspect | Design |
 |--------|--------|
 | Start | `warm` (project current-network cost into bounds, minimal perturbation) or `invcap` (`round(maxCap/cap)`) |
-| Neighborhood | single-edge move, candidates `cur±{1,2,4,8} ∪ {lo,hi}` clamped to `D_e`; frozen edges skipped (pruning) |
+| Neighborhood | single-edge move, candidates `cur±{1,2,4} ∪ {lo,hi}` (`steps` default `[1,2,4]`) clamped to `D_e`; frozen edges skipped (pruning) |
 | Evaluation | each candidate `applyWeights → evalCongestion` (= one all-pairs traffic round) |
 | Selection | best non-tabu neighbor; **aspiration**: a tabu move that breaks the global best is unbanned |
-| Tabu list | records the reverse move `(edge,oldW)`, tenure ≈ √(movable) |
-| Diversification | `stallK` consecutive non-improving rounds → randomly reset `divM` edges (seeded PRNG) |
-| Termination | `MLU ≤ target` (default 0.75) / cap `maxIters` / no movable neighbors → return the global best |
-| Budget | `maxEvals` (deterministic primary limiter, counts neighborhood evaluations) caps runtime; `timeBudgetMs` is only a runaway safety (large enough not to trigger at normal scale) |
+| Tabu list | records the reverse move `(edge,oldW)`, tenure = `tabuTenure` or `max(5, round(√movable))` |
+| Diversification | `stallK` (default 8) consecutive non-improving rounds → randomly reset `divM` edges (seeded PRNG) |
+| Termination | `MLU ≤ target` (default 0.75) / cap `maxIters` (default 300) / global best not improved for `stopAfter` iterations (default `max(15, stallK + 12)`) / no movable neighbors → return the global best |
+| Budget | `maxEvals` (default 6000; deterministic primary limiter, counts neighborhood evaluations, checked once per iteration so a run can overshoot by up to one neighborhood; diversification and `binding` evaluations are not counted) caps runtime; `timeBudgetMs` (default 15000) is only a runaway safety (large enough not to trigger at normal scale); `seed` default 1 |
 | Reproducibility | `mulberry32(seed)` + `maxEvals` (not wall-clock) → same input same output → stable export |
 
 ### §15.4 Infeasibility handling (first-class output)
 
 - `MLU ≤ target` → `targetMet`
 - `target < MLU < 1` → `feasible` but below target
-- `MLU ≥ 1` → **no solution within constraints**: return `bottleneck` (the edges at MLU) and `binding` — relax each out-of-bound by one step and recompute, ranking "which red line, when loosened, lowers MLU most", for a human to decide on loosening.
+- `MLU ≥ 1` → **no solution within constraints**: return `bottleneck` (the edges at MLU) and `binding` — relax each out-of-bound by one step (trials stay inside `COST_CLAMP`) and recompute, ranking "which red line, when loosened, lowers MLU most" by MLU gain; the top 5 are returned, each `{ edgeId, dir: 'fwd' | 'rev', relaxTo, mluAfter, gain }`, for a human to decide on loosening.
 
 ### §15.5 Functions (engine.js, pure)
 
@@ -743,9 +884,11 @@ constraints actually in effect are the RTT floor + `COST_CLAMP` (`[5,500]`).
 ftLinkPenalty(load, cap)                         → cap·ψ(load/cap)
 evalCongestion(topoW, demand, fE, fN)            → { mlu, sumU2, sumPhi, util, lostDemand }
 applyWeights(topo, weights)                      → shallow copy of topo; weight keys are "weight variables" (eid=forward/symmetric, eid|rev=reverse), no mutation
-buildWeightBounds(topo, { rttFloor, vip, protectedSet, clamp }) → Map<eid,{lo,hi,frozen,conflict}>
-optimizeWeights(topo, demand, bounds, opts)      → { weights, mlu, feasible, targetMet,
-                                                     bottleneck, binding, frozen, history, … }
+buildWeightBounds(topo, { rttFloor, vip, protectedSet, clamp, includeTransit, asymmetric })
+                                                 → Map<varKey,{lo,hi,frozen,conflict,current}>  (varKey = eid / eid|rev)
+optimizeWeights(topo, demand, bounds, opts)      → { weights, mlu, sumU2, sumPhi, util, feasible,
+                                                     targetMet, target, bottleneck, binding, frozen,
+                                                     history, iterations, elapsedMs }
 ```
 
 ### §15.6 Known limitations
@@ -756,14 +899,17 @@ optimizeWeights(topo, demand, bounds, opts)      → { weights, mlu, feasible, t
   - **Opt-in (`asymmetric:true`, the UI "allow asymmetric weights" checkbox)**: **all p2p edges** open a reverse variable (forward/reverse independent, current value `costRev ?? cost`), allowing symmetric edges to also be optimized into asymmetric ones.
   - FT is inherently a directed problem; symmetry is just a compute-saving convention (see §14); **under symmetric demand, asymmetry gives no gain** (so even when checked on the current network it takes the baseline). Red lines (RTT/VIP/protected) share one set of bounds for both directions.
 - **transit ingress cost is also optionally adjustable** (Option B, `buildWeightBounds({ includeTransit:true })`, the UI "also adjust transit" checkbox): only moves `e.cost` (ingress), does not apply the RTT floor, bounds `COST_CLAMP` (`[5,500]`); egress (`PN→router`) is hard-wired 0 by `buildAdjacency`, so B inherently does not violate Type-2 semantics.
-- **"Never worse" guarantee (UI layer, generalized)**: C10 always runs the **baseline** (default configuration) first; if any advanced option (asymmetric / transit) is checked, it additionally runs the **chosen configuration** and **takes the better of the two**. Rationale: advanced options enlarge the search space and, under a fixed evaluation budget, may fall into a **worse local optimum** (single-seed measured: transit 73.8% vs baseline 67.2%); this guarantee ensures the result does not regress. Note: the gap is seed-sensitive (multi-start can catch up), not inherent to the option being worse.
+- **"Never worse" guarantee (UI layer, generalized)**: C10 always runs the **baseline** (default configuration, `init: 'warm'`) first; if any advanced option (InvCap start / asymmetric / transit) is checked, it additionally runs the **chosen configuration** and keeps it only if its MLU is strictly lower than the baseline's (`rSel.mlu < rBase.mlu − 1e-9`; MLU only, not the lexicographic (MLU, S) objective). Rationale: advanced options enlarge the search space and, under a fixed evaluation budget, may fall into a **worse local optimum** (one-off single-seed measurement: transit 73.8% vs baseline 67.2%); this guarantee ensures the result does not regress. Note: the gap is seed-sensitive (multi-start can catch up), not inherent to the option being worse.
 - **Consumes the active demand profile**: optimizing `avg` vs `max` yields different weights; operationally one usually optimizes `max`.
 - **Weights protect a link's attractiveness, not a specific flow's path**: OSPF is destination-oriented + ECMP-split, so it cannot hard-guarantee that a specific flow takes a specific path; hard guarantees need SR / policy routing, out of scope here.
 - Scale per §13: each evaluation is one all-pairs round. To preserve **determinism**, the runtime primary limiter is `maxEvals` (evaluation count) rather than wall-clock; same seed/same graph → same result, runtime varies with the machine but is bounded. `timeBudgetMs` is only a runaway safety, not triggered at normal POC scale (so it doesn't break determinism); for real backbone scale switch to Web Worker + incremental SPF (this version recomputes in full). The UI-side search is synchronous, painting "computing" first then yielding one macrotask so the spinner paints.
 
 > **UI mapping**: the "congestion optimization" block within tab **C10 Link**;
-> results are written back to `edge.cost` via the existing `applyEdgeChange`,
-> then carried away by the existing "export topology.js". The optimizer is the
+> results are written back to `edge.cost` / `edge.costRev` by `applyOptimize`
+> (symmetric edges drop `costRev`; then `paintEdgeLabels` + `render()` +
+> `rerenderIfPathActive()`, the same repaint / recompute steps as
+> `applyEdgeChange`, which it does not call), then carried away by the existing
+> "export topology.js". The optimizer is the
 > **third weight source**, after manual and RTT.
 
 ---
@@ -777,7 +923,7 @@ The UI is fully bilingual (zh / en) via a single dictionary + `t()` lookup;
 
 - `index.html` `§0.5 I18N` defines `const I18N = { zh: {...}, en: {...} }`; the two languages' keys **must be symmetric**.
 - `t(key, params)`: looks up `I18N[LANG][key]`; returns the value if a string, or `value(params)` if a function; **a missing key returns the key itself** (so gaps are visible on screen).
-- Strings with variables use function values: `'c2.failStatus': (p) => \`Current failures: ${p.e} edge(s) / ${p.n} node(s)\``.
+- Strings with variables use function values: `'c2.failStatus': (p) => \`Current failures: ${p.e} link(s) / ${p.n} node(s)\``.
 - Labels that vary by language but live in object constants (tier `label` / `action`) use a **getter** → `t()`, so they resolve at render time and switch instantly.
 
 ### §16.2 Static HTML injection (`applyStaticI18n`)
@@ -802,7 +948,7 @@ Each tab's `render()` uses `t(key, params)` throughout; switching tabs / languag
 
 - Naming `<scope>.<sub>`: `common.*` (cross-tab shared), `c1.*`–`c10.*` (per tab), `ui.*` (chrome).
 - Strings identical across tabs are pulled into `common.*` (e.g. `common.auditBanner` / `scanAllPairs` / `recalc` / `status.*` / `tier.*`).
-- Engine code → text uses dynamic key building: `t('c6.reason.' + code, row)`, `t('c5.optType.' + type)` (the alignment check will show "defined > literal references", which is expected).
+- Engine code → text uses dynamic key building, e.g. `t('c6.reason.' + code, row)` (the alignment check will show "defined > literal references", which is expected). `c5.optType.*` / `c5.srlgType.*` are resolved through literal lookup tables instead.
 
 ### §16.5 Language state and switching
 

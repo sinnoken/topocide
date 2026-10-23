@@ -1,8 +1,8 @@
-# C10 壅塞最佳化 — 下一版設計文件
+# 權重最佳化 v2(N-1 Gate、RTT 繞行上限、頻寬單價)— 設計草案
 
-> **性質**:設計草案(Design Doc),非 SPEC 更新。
-> 對應現有 SPEC.md §15(Fortz-Thorup + Tabu);本文描述**擴充版**,聚焦「目前 v1 不做但要做的」。
-> 確認後再更新 engine.js + SPEC.md §15。
+> **狀態:設計草案,尚未實作。** 本文件供後續設計參考,非現行行為描述。
+> UI 對應分頁 C10;對應現有 `docs/SPEC.md` §15(Fortz-Thorup + Tabu);本文描述**擴充版**,聚焦「目前 v1 不做但要做的」。
+> 確認後再更新 engine.js + `docs/SPEC.md` §15。實作任務見 `docs/plans/TOPOCIDE_IMPROVEMENTS.md` A4。
 
 ---
 
