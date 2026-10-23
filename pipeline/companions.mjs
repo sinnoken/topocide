@@ -1,5 +1,5 @@
 // Phase 3: generate demand/srlg/rtt companions for an EXTERNALLY-PROVIDED topology
-// (e.g. the OSPF-imported one) so the full BlastRadius audit can run for validation.
+// (e.g. the OSPF-imported one) so the full Topocide audit can run for validation.
 // Standalone tool — imports only the PURE engine.js (gen.mjs is NOT importable: it
 // executes + writes on load and is coupled to its own CITY/GEO node model).
 //
@@ -28,7 +28,7 @@ const kmBetween=(a,b)=>{ const ca=cityOf[a],cb=cityOf[b];
   return (ca&&cb&&CITY_GEO[ca]&&CITY_GEO[cb]) ? haversineKmCity(CITY_GEO[ca],CITY_GEO[cb]) : null; };
 
 // ── demand: geo 重力 + 自動校準 ───────────────────────────────────────────
-// mass = stubs 數量 + capacity 加總(對齊 gen.mjs / gravity.mjs SSOT)。
+// mass = stubs 數量 + capacity 加總(對齊 gen.mjs / gravity.js SSOT)。
 // 衰減 = 城市大圈距離(cityless 用中性 GRAVITY_D0)。
 // MLU 與 demand 成線性 → 量一次原始 MLU,再線性縮放到 TARGET_MLU(一發到位、確定性)。
 // 5 profiles:avg / max / asia_busy / amer_busy / eu_busy。浮點 Gbps(round3)。

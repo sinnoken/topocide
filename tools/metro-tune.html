@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Metro Map Tuner — BlastRadius</title>
+<title>Metro Map Tuner — Topocide</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
-<script src="topology.js"></script>
+<script src="../topology.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{display:flex;height:100vh;overflow:hidden;background:#0f1117;color:#e2e8f0;font:13px/1.5 system-ui,sans-serif}
@@ -171,7 +171,7 @@ input[type=range]{width:100%;height:4px;accent-color:#4299e1;cursor:pointer}
       <div class="param">
         <div class="param-header"><span class="param-name">regionGap</span><span class="param-val" id="v_regionGap">300</span></div>
         <input type="range" id="regionGap" min="100" max="600" step="50" value="300">
-        <div class="param-desc">區域間固定間距 (px)：EU · ASIA · AMER 三欄</div>
+        <div class="param-desc">區域間固定間距 (px)：EU · ASIA · AMER（未分類國家另成一欄）</div>
       </div>
       <div class="param">
         <div class="param-header"><span class="param-name">intraScale</span><span class="param-val" id="v_intraScale">0.80</span></div>
@@ -226,13 +226,13 @@ input[type=range]{width:100%;height:4px;accent-color:#4299e1;cursor:pointer}
     <div style="display:flex;flex-direction:column;gap:6px;margin-top:6px">
       <div class="octi-bar-wrap"><div id="octiBarFill"></div></div>
       <div class="stat-row">
-        <div class="stat"><div class="stat-val" id="s_pct">—</div><div class="stat-label">八向化率</div></div>
+        <div class="stat"><div class="stat-val" id="s_pct">—</div><div class="stat-label">八向化率（以 45° 判定）</div></div>
         <div class="stat"><div class="stat-val" id="s_ok">—</div><div class="stat-label">達標邊</div></div>
         <div class="stat"><div class="stat-val" id="s_total">—</div><div class="stat-label">總邊數</div></div>
         <div class="stat"><div class="stat-val" id="s_placed">—</div><div class="stat-label">地理節點</div></div>
       </div>
       <div class="legend">
-        <div class="leg"><div class="leg-line" style="background:#48bb78"></div>八向化</div>
+        <div class="leg"><div class="leg-line" style="background:#48bb78"></div>八向化（45° 倍數）</div>
         <div class="leg"><div class="leg-line" style="background:#f6ad55"></div>近似</div>
         <div class="leg"><div class="leg-line" style="background:#fc8181"></div>非八向</div>
       </div>
@@ -290,9 +290,9 @@ input[type=range]{width:100%;height:4px;accent-color:#4299e1;cursor:pointer}
 </div>
 
 <script type="module">
-import { CITY_GEO as GRAVITY_CITY_GEO } from './gravity.js';
+import { CITY_GEO as GRAVITY_CITY_GEO } from '../gravity.js';
 
-// ── Equal Earth 投影(與 edit.html 相同) ──
+// ── Equal Earth 投影(與 edit.html 類似;LON0、de-overlap 與最終格點吸附不同,八向化率僅供參考) ──
 const EE_A=[1.340264,-0.081106,0.000893,0.003796],EE_DEG=0.015037;
 function equalEarth(lat,lon,lon0){
   const R=Math.PI/180,dl=((lon-lon0+540)%360)-180;
@@ -474,7 +474,7 @@ function drawCurve(mode,params){
       ctx.fillText(l,PAD.l+i*bw+bw/2,PAD.t+iH/2+4);
     });
     ctx.textAlign='left';
-    document.getElementById('curveLabel').textContent='三區域固定間距排列';
+    document.getElementById('curveLabel').textContent='區域固定間距排列';
   }
 }
 

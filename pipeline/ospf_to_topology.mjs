@@ -24,7 +24,7 @@ const posLines = allNodes.map((n, i) => `    ${j(n.id)}: { x:${120 + (i % POSCOL
 
 const out = `// IMPORTED from Cisco OSPF LSDB (show ip ospf database router/network), Area 0, Model B (transit /30 collapsed to p2p).
 // NOT the demo dataset. capacity=${OSPF_PLACEHOLDER_CAP} is a PLACEHOLDER — OSPF carries no bandwidth; fill via edit.html curation.
-// id = 城市3碼+序號(由 working/rid_hostname.csv 對應 hostname→城市);label = hostname;city/country 自動帶出。
+// id = 城市3碼+序號(由 pipeline/rid_hostname.csv 對應 hostname→城市);label = hostname;city/country 自動帶出。
 // positions = deterministic grid start (import runs NO layout) — refine via layout menu (Equal Earth) anytime.
 const topology = {
   nodes: [

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Deterministic generator for BlastRadius POC — multi-region synthetic backbone (size varies with --nodes).
-// BlastRadius POC 確定性資料產生器(Node ES module)。Emits topology.js, demand.js, srlg.js, rtt.js to output/.
+// Deterministic generator for Topocide POC — multi-region synthetic backbone (size varies with --nodes).
+// Topocide POC 確定性資料產生器(Node ES module)。Emits topology.js, demand.js, srlg.js, rtt.js to output/.
 // 設計目標:確定性輸出 — 同輸入永遠 byte-identical(同一容器內 libm 一致 → 浮點 bit 對齊)。
 //
 // 數字格式對齊重點:
@@ -731,7 +731,7 @@ for (const e of edges) {
   (nodeEdgeMap[e.source] ??= []).push(e);
   (nodeEdgeMap[e.target] ??= []).push(e);
 }
-// mass = stubs 數量 + connected capacity 加總(對齊 companions.mjs / gravity.mjs SSOT)
+// mass = stubs 數量 + connected capacity 加總(對齊 companions.mjs / gravity.js SSOT)
 const massOf = n => gravityMass(n, nodeEdgeMap[n] || [], nodeStubs[n] || []);
 
 function baseDemand(a, b) {
